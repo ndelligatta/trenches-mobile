@@ -1,25 +1,23 @@
 import React from 'react';
-import { TouchableOpacity, Text, View, Image, StyleSheet, Dimensions } from 'react-native';
+import { TouchableOpacity, Text, View, Image, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { ShopItem } from '../../constants/items';
-import { COLORS, FONT, SPACING, RARITY_COLORS } from '../../constants/theme';
-
-const CARD_WIDTH = (Dimensions.get('window').width - SPACING.lg * 2 - SPACING.sm) / 2;
-const CARD_HEIGHT = CARD_WIDTH * 1.6;
+import { COLORS, FONT, RARITY_COLORS } from '../../constants/theme';
 
 interface ItemCardProps {
   item: ShopItem;
-  wide?: boolean;
+  cardWidth: number;
 }
 
-export function ItemCard({ item, wide }: ItemCardProps) {
-  const cardWidth = wide ? CARD_WIDTH * 1.3 : CARD_WIDTH;
+export function ItemCard({ item, cardWidth }: ItemCardProps) {
   const [bg1, bg2, bg3] = item.bgGradient;
+  const rarityColor = RARITY_COLORS[item.rarity];
+  const cardHeight = Math.floor(cardWidth * 1.25);
 
   return (
     <TouchableOpacity
-      style={[styles.card, { width: cardWidth }]}
+      style={[styles.card, { width: cardWidth, height: cardHeight }]}
       activeOpacity={0.85}
       onPress={() => router.push(`/item/${item.id}`)}
     >
@@ -29,12 +27,11 @@ export function ItemCard({ item, wide }: ItemCardProps) {
         style={StyleSheet.absoluteFill}
       />
 
+      {/* Rarity color bar at top */}
+      <View style={[styles.rarityBar, { backgroundColor: rarityColor }]} />
+
       {/* Character image */}
-      <Image
-        source={item.image}
-        style={styles.charImage}
-        resizeMode="cover"
-      />
+      <Image source={item.image} style={styles.charImage} resizeMode="cover" />
 
       {/* Badge */}
       {item.badge && (
@@ -53,18 +50,20 @@ export function ItemCard({ item, wide }: ItemCardProps) {
 
       {/* Bottom info overlay */}
       <LinearGradient
-        colors={['transparent', bg3 + 'cc', bg3]}
+        colors={['transparent', 'rgba(0,0,0,0.65)', 'rgba(0,0,0,0.92)']}
         style={styles.infoGradient}
       >
-        <Text style={styles.itemName} numberOfLines={2}>{item.name}</Text>
-        <Text style={styles.itemType}>{item.typeName}</Text>
-        <View style={styles.priceRow}>
-          <View style={styles.trenchIcon}>
-            <Text style={styles.trenchSymbol}>V</Text>
+        <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
+        <View style={styles.bottomRow}>
+          <Text style={[styles.typeName, { color: rarityColor }]}>{item.rarity}</Text>
+          <View style={styles.priceRow}>
+            <View style={styles.trenchIcon}>
+              <Text style={styles.trenchSymbol}>V</Text>
+            </View>
+            <Text style={styles.priceText}>
+              {item.price === -1 ? 'N/A' : item.price.toLocaleString()}
+            </Text>
           </View>
-          <Text style={styles.priceText}>
-            {item.price === -1 ? '∞' : item.price.toLocaleString()}
-          </Text>
         </View>
       </LinearGradient>
     </TouchableOpacity>
@@ -73,10 +72,16 @@ export function ItemCard({ item, wide }: ItemCardProps) {
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 14,
+    borderRadius: 12,
     overflow: 'hidden',
-    marginRight: SPACING.sm,
-    height: CARD_HEIGHT,
+  },
+  rarityBar: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 3,
+    zIndex: 10,
   },
   charImage: {
     ...StyleSheet.absoluteFillObject,
@@ -86,18 +91,17 @@ const styles = StyleSheet.create({
   badgeContainer: {
     position: 'absolute',
     top: 8,
-    left: 8,
+    left: 6,
     zIndex: 10,
-    flexDirection: 'row',
   },
   badge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 5,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
   },
   badgeText: {
     fontFamily: FONT.bold,
-    fontSize: 9,
+    fontSize: 8,
     letterSpacing: 0.5,
     textTransform: 'uppercase',
   },
@@ -106,32 +110,37 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    paddingTop: 40,
-    paddingHorizontal: 10,
-    paddingBottom: 10,
+    paddingTop: 28,
+    paddingHorizontal: 8,
+    paddingBottom: 8,
   },
   itemName: {
     color: '#fff',
     fontFamily: FONT.bold,
-    fontSize: 14,
-    lineHeight: 17,
+    fontSize: 13,
+    lineHeight: 16,
   },
-  itemType: {
-    color: 'rgba(255,255,255,0.65)',
-    fontFamily: FONT.medium,
+  bottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 3,
+  },
+  typeName: {
+    fontFamily: FONT.semibold,
     fontSize: 10,
-    marginTop: 1,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   priceRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    marginTop: 4,
+    gap: 3,
   },
   trenchIcon: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
     backgroundColor: '#fff',
     justifyContent: 'center',
     alignItems: 'center',
@@ -139,11 +148,11 @@ const styles = StyleSheet.create({
   trenchSymbol: {
     color: '#000',
     fontFamily: FONT.bold,
-    fontSize: 9,
+    fontSize: 8,
   },
   priceText: {
     color: '#fff',
     fontFamily: FONT.bold,
-    fontSize: 13,
+    fontSize: 12,
   },
 });

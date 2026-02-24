@@ -4,11 +4,13 @@ import { useWallet } from '../../contexts/WalletContext';
 import { COLORS, FONT, SPACING } from '../../constants/theme';
 
 export function WalletButton() {
-  const { connected, connecting, publicKey, balance, connect, disconnect } = useWallet();
+  const { connected, connecting, address, balance, playerName, openWalletModal, disconnect } = useWallet();
 
-  const truncatedAddress = publicKey
-    ? `${publicKey.toBase58().slice(0, 4)}...${publicKey.toBase58().slice(-4)}`
-    : '';
+  const displayName = playerName
+    ? playerName
+    : address
+      ? `${address.slice(0, 4)}...${address.slice(-4)}`
+      : '';
 
   if (connecting) {
     return (
@@ -29,15 +31,15 @@ export function WalletButton() {
         </View>
         <View style={styles.addressBadge}>
           <View style={styles.dot} />
-          <Text style={styles.addressText}>{truncatedAddress}</Text>
+          <Text style={styles.addressText}>{displayName}</Text>
         </View>
       </TouchableOpacity>
     );
   }
 
   return (
-    <TouchableOpacity style={styles.connectButton} onPress={connect}>
-      <Text style={styles.connectText}>Connect Wallet</Text>
+    <TouchableOpacity style={styles.connectButton} onPress={openWalletModal}>
+      <Text style={styles.connectText}>Login</Text>
     </TouchableOpacity>
   );
 }

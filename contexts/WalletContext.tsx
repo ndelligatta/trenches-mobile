@@ -1,160 +1,189 @@
-import React, { createContext, useContext, useState, useCallback, useRef } from 'react';
-import { Platform, Alert, TurboModuleRegistry } from 'react-native';
-import { PublicKey, Transaction, Connection, clusterApiUrl } from '@solana/web3.js';
-
-// Check if the Solana Mobile native module is available (custom dev client / production only)
-// TurboModuleRegistry.get() returns null instead of throwing, unlike getEnforcing()
-const hasSolanaMobileNative = !!TurboModuleRegistry.get('SolanaMobileWalletAdapter');
-
-let transactFn: any = null;
-function getTransact() {
-  if (!transactFn && hasSolanaMobileNative) {
-    try {
-      transactFn = require('@solana-mobile/mobile-wallet-adapter-protocol-web3js').transact;
-    } catch {
-      transactFn = null;
-    }
-  }
-  return transactFn;
-}
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
+import { Alert } from 'react-native';
+import { Connection, PublicKey, clusterApiUrl } from '@solana/web3.js';
+import { useAppKit, useAccount, useAppKitState } from '@reown/appkit-react-native';
+import {
+  ensurePlayer,
+  getPlayer,
+  addCurrency,
+  addPurchasedItem,
+  setName as setPlayerName,
+  type Player,
+} from '../lib/supabase';
 
 const CLUSTER = 'mainnet-beta';
-const APP_IDENTITY = {
-  name: 'Trenches',
-  uri: 'https://trenchesgame.com',
-  icon: 'favicon.ico',
-};
 
-interface WalletState {
-  publicKey: PublicKey | null;
+interface WalletContextType {
+  address: string | undefined;
   connected: boolean;
   connecting: boolean;
   balance: number | null;
-  trenchBalance: number | null;
-}
-
-interface WalletContextType extends WalletState {
-  connect: () => Promise<void>;
+  player: Player | null;
+  playerName: string | null;
+  playerLoading: boolean;
+  openWalletModal: () => void;
   disconnect: () => void;
-  signAndSendTransaction: (tx: Transaction) => Promise<string | null>;
+  refreshPlayer: () => Promise<void>;
+  updatePlayerName: (name: string) => Promise<void>;
+  purchaseItem: (itemId: string, price: number) => Promise<boolean>;
   connection: Connection;
 }
 
 const WalletContext = createContext<WalletContextType | null>(null);
 
 export function WalletProvider({ children }: { children: React.ReactNode }) {
-  const [state, setState] = useState<WalletState>({
-    publicKey: null,
-    connected: false,
-    connecting: false,
-    balance: null,
-    trenchBalance: null,
-  });
+  const { open, disconnect: appKitDisconnect } = useAppKit();
+  const { address: rawAddress, isConnected } = useAccount();
+  const { isLoading } = useAppKitState();
+
+  const [balance, setBalance] = useState<number | null>(null);
+  const [player, setPlayer] = useState<Player | null>(null);
+  const [playerName, setPlayerNameState] = useState<string | null>(null);
+  const [playerLoading, setPlayerLoading] = useState(false);
 
   const connectionRef = useRef(new Connection(clusterApiUrl(CLUSTER)));
-  const authTokenRef = useRef<string | null>(null);
+  const prevAddressRef = useRef<string | undefined>(undefined);
 
-  const connect = useCallback(async () => {
-    if (Platform.OS === 'web') {
-      console.warn('Solana Mobile Wallet Adapter is not available on web');
+  // Parse CAIP address if needed (e.g. "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp:BASE58ADDR" → "BASE58ADDR")
+  const address = rawAddress?.includes(':') ? rawAddress.split(':').pop() : rawAddress;
+
+  // Sync player data when address changes
+  useEffect(() => {
+    if (!address || !isConnected) {
+      if (prevAddressRef.current) {
+        setBalance(null);
+        setPlayer(null);
+        setPlayerNameState(null);
+      }
+      prevAddressRef.current = undefined;
       return;
     }
 
-    const transact = getTransact();
-    if (!transact) {
-      Alert.alert(
-        'Dev Client Required',
-        'Solana Mobile Wallet Adapter requires a custom dev client build. Run `npx expo run:android` to build one.',
-      );
-      return;
-    }
+    if (address === prevAddressRef.current) return;
+    prevAddressRef.current = address;
 
-    setState(prev => ({ ...prev, connecting: true }));
+    let cancelled = false;
 
-    try {
-      await transact(async (wallet: any) => {
-        const authResult = await wallet.authorize({
-          cluster: CLUSTER,
-          identity: APP_IDENTITY,
-        });
+    (async () => {
+      setPlayerLoading(true);
 
-        const pubkey = new PublicKey(authResult.accounts[0].address);
-        authTokenRef.current = authResult.auth_token;
+      // Fetch SOL balance
+      try {
+        const lamports = await connectionRef.current.getBalance(new PublicKey(address));
+        if (!cancelled) setBalance(lamports / 1e9);
+      } catch {
+        if (!cancelled) setBalance(null);
+      }
 
-        // Fetch SOL balance
-        let solBalance: number | null = null;
-        try {
-          const lamports = await connectionRef.current.getBalance(pubkey);
-          solBalance = lamports / 1e9;
-        } catch {
-          // Balance fetch failed, continue anyway
+      // Ensure player exists + fetch data
+      try {
+        await ensurePlayer(address);
+        const { data } = await getPlayer(address);
+        if (!cancelled && data) {
+          setPlayer(data);
+          setPlayerNameState(data.name);
         }
+      } catch (err) {
+        console.error('Failed to load player:', err);
+      }
 
-        setState({
-          publicKey: pubkey,
-          connected: true,
-          connecting: false,
-          balance: solBalance,
-          trenchBalance: null, // TODO: Fetch $TRENCH SPL token balance
-        });
-      });
-    } catch (err) {
-      console.error('Wallet connection failed:', err);
-      setState(prev => ({ ...prev, connecting: false }));
-    }
-  }, []);
+      if (!cancelled) setPlayerLoading(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [address, isConnected]);
+
+  const openWalletModal = useCallback(() => {
+    open();
+  }, [open]);
 
   const disconnect = useCallback(() => {
-    authTokenRef.current = null;
-    setState({
-      publicKey: null,
-      connected: false,
-      connecting: false,
-      balance: null,
-      trenchBalance: null,
-    });
-  }, []);
+    appKitDisconnect();
+    setBalance(null);
+    setPlayer(null);
+    setPlayerNameState(null);
+    prevAddressRef.current = undefined;
+  }, [appKitDisconnect]);
 
-  const signAndSendTransaction = useCallback(async (tx: Transaction): Promise<string | null> => {
-    if (Platform.OS === 'web') return null;
-
-    const transact = getTransact();
-    if (!transact) return null;
-
+  const refreshPlayer = useCallback(async () => {
+    if (!address) return;
+    setPlayerLoading(true);
     try {
-      const signature = await transact(async (wallet: any) => {
-        if (authTokenRef.current) {
-          await wallet.reauthorize({
-            auth_token: authTokenRef.current,
-            identity: APP_IDENTITY,
-          });
+      const { data } = await getPlayer(address);
+      if (data) {
+        setPlayer(data);
+        setPlayerNameState(data.name);
+      }
+    } catch (err) {
+      console.error('Failed to refresh player:', err);
+    }
+    setPlayerLoading(false);
+  }, [address]);
+
+  const updatePlayerName = useCallback(
+    async (name: string) => {
+      if (!address) return;
+      const { error } = await setPlayerName(address, name);
+      if (error) {
+        Alert.alert('Error', 'Failed to update name');
+        return;
+      }
+      setPlayerNameState(name);
+      if (player) setPlayer({ ...player, name });
+    },
+    [address, player],
+  );
+
+  const purchaseItem = useCallback(
+    async (itemId: string, price: number): Promise<boolean> => {
+      if (!address || !player) return false;
+
+      if (player.currency < price) {
+        Alert.alert('Insufficient Funds', 'You don\'t have enough currency for this purchase.');
+        return false;
+      }
+
+      try {
+        const { error: currErr } = await addCurrency(address, -price);
+        if (currErr) throw currErr;
+
+        const { error: itemErr } = await addPurchasedItem(address, itemId, 'owned');
+        if (itemErr) throw itemErr;
+
+        // Refresh player data after purchase
+        const { data } = await getPlayer(address);
+        if (data) {
+          setPlayer(data);
+          setPlayerNameState(data.name);
         }
 
-        const { blockhash } = await connectionRef.current.getLatestBlockhash();
-        tx.recentBlockhash = blockhash;
-        tx.feePayer = state.publicKey!;
-
-        const signedTxs = await wallet.signAndSendTransactions({
-          transactions: [tx],
-        });
-
-        return signedTxs[0];
-      });
-
-      return typeof signature === 'string' ? signature : null;
-    } catch (err) {
-      console.error('Transaction failed:', err);
-      return null;
-    }
-  }, [state.publicKey]);
+        return true;
+      } catch (err) {
+        console.error('Purchase failed:', err);
+        Alert.alert('Purchase Failed', 'Something went wrong. Please try again.');
+        return false;
+      }
+    },
+    [address, player],
+  );
 
   return (
     <WalletContext.Provider
       value={{
-        ...state,
-        connect,
+        address,
+        connected: isConnected,
+        connecting: isLoading,
+        balance,
+        player,
+        playerName,
+        playerLoading,
+        openWalletModal,
         disconnect,
-        signAndSendTransaction,
+        refreshPlayer,
+        updatePlayerName,
+        purchaseItem,
         connection: connectionRef.current,
       }}
     >

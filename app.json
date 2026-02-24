@@ -15,7 +15,15 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.trenches.mobile"
+      "bundleIdentifier": "com.trenches.mobile",
+      "infoPlist": {
+        "LSApplicationQueriesSchemes": [
+          "phantom",
+          "solflare",
+          "backpack",
+          "glow"
+        ]
+      }
     },
     "android": {
       "adaptiveIcon": {

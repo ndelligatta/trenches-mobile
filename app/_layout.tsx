@@ -10,6 +10,8 @@ import {
   Inter_700Bold,
   Inter_900Black,
 } from '@expo-google-fonts/inter';
+import { AppKitProvider, AppKit } from '@reown/appkit-react-native';
+import { appkit } from '../lib/appkit';
 import { WalletProvider } from '../contexts/WalletContext';
 import { COLORS } from '../constants/theme';
 
@@ -27,18 +29,21 @@ export default function RootLayout() {
   }
 
   return (
-    <WalletProvider>
-      <View style={styles.container}>
-        <StatusBar style="light" />
-        <Stack
-          screenOptions={{
-            headerShown: false,
-            contentStyle: { backgroundColor: COLORS.background },
-            animation: 'slide_from_right',
-          }}
-        />
-      </View>
-    </WalletProvider>
+    <AppKitProvider instance={appkit}>
+      <WalletProvider>
+        <View style={styles.container}>
+          <StatusBar style="light" />
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              contentStyle: { backgroundColor: COLORS.background },
+              animation: 'slide_from_right',
+            }}
+          />
+        </View>
+        <AppKit />
+      </WalletProvider>
+    </AppKitProvider>
   );
 }
 

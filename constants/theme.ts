@@ -16,11 +16,12 @@ export const COLORS = {
   textMuted: '#5A5E72',
 
   // Rarity
-  common: '#8B8B8B',
-  rare: '#4A90D9',
-  epic: '#9B59B6',
-  legendary: '#F5C518',
-  mythic: '#FF4444',
+  common: '#b0b0b0',
+  rare: '#3090ff',
+  epic: '#b040ff',
+  legendary: '#ff8c00',
+  exclusive: '#FFD700',
+  mythic: '#6B238E',
 
   // Status
   success: '#2ECC71',
@@ -32,22 +33,24 @@ export const COLORS = {
   divider: '#2a2a4a',
 } as const;
 
-export type Rarity = 'common' | 'rare' | 'epic' | 'legendary' | 'mythic';
+export type Rarity = 'common' | 'rare' | 'epic' | 'legendary' | 'exclusive' | 'mythic';
 
 export const RARITY_COLORS: Record<Rarity, string> = {
   common: COLORS.common,
   rare: COLORS.rare,
   epic: COLORS.epic,
   legendary: COLORS.legendary,
+  exclusive: COLORS.exclusive,
   mythic: COLORS.mythic,
 };
 
 export const RARITY_GRADIENTS: Record<Rarity, [string, string]> = {
-  common: ['#3a3a3a', '#1a1a1a'],
-  rare: ['#1a3a5a', '#0a1a2e'],
-  epic: ['#3a1a4a', '#1a0a2e'],
-  legendary: ['#4a3a0a', '#2e1a00'],
-  mythic: ['#4a0a0a', '#2e0000'],
+  common: ['#4a4a4a', '#2a2a2a'],
+  rare: ['#1a5276', '#0d2847'],
+  epic: ['#6a2d9c', '#3a1560'],
+  legendary: ['#b8640b', '#6b3a08'],
+  exclusive: ['#b8960b', '#6b5808'],
+  mythic: ['#6B238E', '#3a1150'],
 };
 
 export const SPACING = {

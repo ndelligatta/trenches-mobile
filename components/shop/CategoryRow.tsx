@@ -1,8 +1,10 @@
 import React from 'react';
-import { View, Text, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, Dimensions } from 'react-native';
 import { ShopCategory } from '../../constants/items';
 import { ItemCard } from './ItemCard';
 import { COLORS, FONT, SPACING } from '../../constants/theme';
+
+const CARD_WIDTH = Math.floor((Dimensions.get('window').width - 24 - 10) / 2);
 
 interface CategoryRowProps {
   category: ShopCategory;
@@ -21,7 +23,7 @@ export function CategoryRow({ category }: CategoryRowProps) {
         contentContainerStyle={styles.scrollContent}
       >
         {category.items.map(item => (
-          <ItemCard key={item.id} item={item} />
+          <ItemCard key={item.id} item={item} cardWidth={CARD_WIDTH} />
         ))}
       </ScrollView>
     </View>
@@ -52,5 +54,6 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: SPACING.lg,
+    gap: 10,
   },
 });
