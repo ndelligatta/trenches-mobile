@@ -25,7 +25,7 @@ const PREVIEW_HEIGHT = Math.min(SCREEN_WIDTH * 0.85, 340);
 export default function ItemDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
-  const { connected, openWalletModal, purchaseItem } = useWallet();
+  const { connected, connectMWA, purchaseItem } = useWallet();
   const [purchasing, setPurchasing] = useState(false);
 
   const item = getItemById(id);
@@ -48,7 +48,7 @@ export default function ItemDetailScreen() {
 
   const handlePurchase = async () => {
     if (!connected) {
-      openWalletModal();
+      connectMWA();
       return;
     }
 

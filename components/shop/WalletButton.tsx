@@ -4,7 +4,7 @@ import { useWallet } from '../../contexts/WalletContext';
 import { COLORS, FONT, SPACING } from '../../constants/theme';
 
 export function WalletButton() {
-  const { connected, connecting, address, balance, playerName, openWalletModal, disconnect } = useWallet();
+  const { connected, connecting, address, balance, playerName, connectMWA, openWalletModal, disconnect } = useWallet();
 
   const displayName = playerName
     ? playerName
@@ -38,9 +38,14 @@ export function WalletButton() {
   }
 
   return (
-    <TouchableOpacity style={styles.connectButton} onPress={openWalletModal}>
-      <Text style={styles.connectText}>Login</Text>
-    </TouchableOpacity>
+    <View style={styles.loginRow}>
+      <TouchableOpacity style={styles.connectButton} onPress={connectMWA}>
+        <Text style={styles.connectText}>Connect Wallet</Text>
+      </TouchableOpacity>
+      <TouchableOpacity style={styles.altLoginButton} onPress={openWalletModal}>
+        <Text style={styles.altLoginText}>More</Text>
+      </TouchableOpacity>
+    </View>
   );
 }
 
@@ -55,6 +60,11 @@ const styles = StyleSheet.create({
     fontFamily: FONT.medium,
     fontSize: 14,
   },
+  loginRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+  },
   connectButton: {
     backgroundColor: COLORS.primary,
     paddingHorizontal: SPACING.lg,
@@ -66,6 +76,19 @@ const styles = StyleSheet.create({
     fontFamily: FONT.bold,
     fontSize: 14,
     letterSpacing: 0.5,
+  },
+  altLoginButton: {
+    backgroundColor: COLORS.surface,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm + 2,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: COLORS.cardBorder,
+  },
+  altLoginText: {
+    color: COLORS.textSecondary,
+    fontFamily: FONT.medium,
+    fontSize: 13,
   },
   connectedContainer: {
     flexDirection: 'row',

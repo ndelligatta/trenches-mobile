@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
-import { Alert } from 'react-native';
+import { Platform, Alert } from 'react-native';
 import { Connection, PublicKey, clusterApiUrl } from '@solana/web3.js';
 import { useAppKit, useAccount, useAppKitState } from '@reown/appkit-react-native';
 import {
@@ -12,6 +12,25 @@ import {
 } from '../lib/supabase';
 
 const CLUSTER = 'mainnet-beta';
+const APP_IDENTITY = {
+  name: 'Trenches',
+  uri: 'https://trenchesgame.com',
+  icon: 'favicon.ico',
+};
+
+// Lazy-load MWA to avoid crashes when native module isn't available
+let mwaTransact: any = null;
+function getTransact() {
+  if (mwaTransact) return mwaTransact;
+  if (Platform.OS !== 'web') {
+    try {
+      mwaTransact = require('@solana-mobile/mobile-wallet-adapter-protocol-web3js').transact;
+    } catch {
+      mwaTransact = null;
+    }
+  }
+  return mwaTransact;
+}
 
 interface WalletContextType {
   address: string | undefined;
@@ -21,21 +40,29 @@ interface WalletContextType {
   player: Player | null;
   playerName: string | null;
   playerLoading: boolean;
+  connectMWA: () => Promise<void>;
   openWalletModal: () => void;
   disconnect: () => void;
   refreshPlayer: () => Promise<void>;
   updatePlayerName: (name: string) => Promise<void>;
   purchaseItem: (itemId: string, price: number) => Promise<boolean>;
   connection: Connection;
+  connectedVia: 'mwa' | 'appkit' | null;
 }
 
 const WalletContext = createContext<WalletContextType | null>(null);
 
 export function WalletProvider({ children }: { children: React.ReactNode }) {
   const { open, disconnect: appKitDisconnect } = useAppKit();
-  const { address: rawAddress, isConnected } = useAccount();
-  const { isLoading } = useAppKitState();
+  const { address: appKitRawAddress, isConnected: appKitConnected } = useAccount();
+  const { isLoading: appKitLoading } = useAppKitState();
 
+  // MWA-specific state
+  const [mwaAddress, setMwaAddress] = useState<string | null>(null);
+  const [mwaConnecting, setMwaConnecting] = useState(false);
+  const mwaAuthTokenRef = useRef<string | null>(null);
+
+  // Shared state
   const [balance, setBalance] = useState<number | null>(null);
   const [player, setPlayer] = useState<Player | null>(null);
   const [playerName, setPlayerNameState] = useState<string | null>(null);
@@ -44,12 +71,76 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   const connectionRef = useRef(new Connection(clusterApiUrl(CLUSTER)));
   const prevAddressRef = useRef<string | undefined>(undefined);
 
-  // Parse CAIP address if needed (e.g. "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp:BASE58ADDR" → "BASE58ADDR")
-  const address = rawAddress?.includes(':') ? rawAddress.split(':').pop() : rawAddress;
+  // Determine active connection: MWA takes priority
+  const connectedVia: 'mwa' | 'appkit' | null = mwaAddress
+    ? 'mwa'
+    : appKitConnected
+      ? 'appkit'
+      : null;
 
-  // Sync player data when address changes
+  // Parse CAIP address if needed for AppKit
+  const appKitAddress = appKitRawAddress?.includes(':')
+    ? appKitRawAddress.split(':').pop()
+    : appKitRawAddress;
+
+  // The active address from whichever connection method is active
+  const address = mwaAddress ?? (appKitConnected ? appKitAddress : undefined);
+  const connected = !!address;
+  const connecting = mwaConnecting || appKitLoading;
+
+  // MWA connect — primary method for Seeker
+  const connectMWA = useCallback(async () => {
+    const transact = getTransact();
+    if (!transact) {
+      Alert.alert(
+        'Wallet Not Available',
+        'Mobile Wallet Adapter is not available on this device. Try other login options.',
+      );
+      return;
+    }
+
+    setMwaConnecting(true);
+    try {
+      await transact(async (wallet: any) => {
+        const authResult = await wallet.authorize({
+          cluster: CLUSTER,
+          identity: APP_IDENTITY,
+        });
+
+        const pubkey = new PublicKey(authResult.accounts[0].address);
+        const addr = pubkey.toBase58();
+        mwaAuthTokenRef.current = authResult.auth_token;
+        setMwaAddress(addr);
+      });
+    } catch (err) {
+      console.error('MWA connection failed:', err);
+    }
+    setMwaConnecting(false);
+  }, []);
+
+  // AppKit modal — secondary option (Google login, etc.)
+  const openWalletModal = useCallback(() => {
+    open();
+  }, [open]);
+
+  // Disconnect whichever method is active
+  const disconnect = useCallback(() => {
+    if (mwaAddress) {
+      mwaAuthTokenRef.current = null;
+      setMwaAddress(null);
+    }
+    if (appKitConnected) {
+      appKitDisconnect();
+    }
+    setBalance(null);
+    setPlayer(null);
+    setPlayerNameState(null);
+    prevAddressRef.current = undefined;
+  }, [mwaAddress, appKitConnected, appKitDisconnect]);
+
+  // Sync player data when address changes (works for both MWA and AppKit)
   useEffect(() => {
-    if (!address || !isConnected) {
+    if (!address) {
       if (prevAddressRef.current) {
         setBalance(null);
         setPlayer(null);
@@ -75,7 +166,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         if (!cancelled) setBalance(null);
       }
 
-      // Ensure player exists + fetch data
+      // Ensure player exists + fetch data from Supabase
       try {
         await ensurePlayer(address);
         const { data } = await getPlayer(address);
@@ -93,19 +184,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [address, isConnected]);
-
-  const openWalletModal = useCallback(() => {
-    open();
-  }, [open]);
-
-  const disconnect = useCallback(() => {
-    appKitDisconnect();
-    setBalance(null);
-    setPlayer(null);
-    setPlayerNameState(null);
-    prevAddressRef.current = undefined;
-  }, [appKitDisconnect]);
+  }, [address]);
 
   const refreshPlayer = useCallback(async () => {
     if (!address) return;
@@ -152,7 +231,6 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         const { error: itemErr } = await addPurchasedItem(address, itemId, 'owned');
         if (itemErr) throw itemErr;
 
-        // Refresh player data after purchase
         const { data } = await getPlayer(address);
         if (data) {
           setPlayer(data);
@@ -173,18 +251,20 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     <WalletContext.Provider
       value={{
         address,
-        connected: isConnected,
-        connecting: isLoading,
+        connected,
+        connecting,
         balance,
         player,
         playerName,
         playerLoading,
+        connectMWA,
         openWalletModal,
         disconnect,
         refreshPlayer,
         updatePlayerName,
         purchaseItem,
         connection: connectionRef.current,
+        connectedVia,
       }}
     >
       {children}
