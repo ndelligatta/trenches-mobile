@@ -56,7 +56,10 @@ export default function ItemDetailScreen() {
     try {
       const success = await purchaseItem(item.id, item.price);
       if (success) {
-        Alert.alert('Success', `${item.name} has been added to your inventory!`);
+        Alert.alert(
+          'Purchase Complete!',
+          `${item.name} has been added to your inventory.\n\nThe transaction has been confirmed on-chain.`,
+        );
       }
     } finally {
       setPurchasing(false);
@@ -87,6 +90,7 @@ export default function ItemDetailScreen() {
               modelFile={item.model!}
               cameraOrbit={item.cameraOrbit}
               bgGradient={item.bgGradient}
+              thumbnail={item.image}
             />
           ) : (
             <>

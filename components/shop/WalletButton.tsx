@@ -1,9 +1,11 @@
 import React from 'react';
 import { TouchableOpacity, Text, StyleSheet, View, ActivityIndicator } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useWallet } from '../../contexts/WalletContext';
 import { COLORS, FONT, SPACING } from '../../constants/theme';
 
 export function WalletButton() {
+  const router = useRouter();
   const { connected, connecting, address, balance, playerName, connectMWA, openWalletModal, disconnect } = useWallet();
 
   const displayName = playerName
@@ -23,7 +25,7 @@ export function WalletButton() {
 
   if (connected) {
     return (
-      <View style={styles.connectedContainer}>
+      <TouchableOpacity style={styles.connectedContainer} onPress={() => router.push('/profile')}>
         <View style={styles.balanceRow}>
           <Text style={styles.balanceText}>
             {balance !== null ? `${balance.toFixed(2)} SOL` : '---'}
@@ -33,10 +35,7 @@ export function WalletButton() {
           <View style={styles.dot} />
           <Text style={styles.addressText}>{displayName}</Text>
         </View>
-        <TouchableOpacity style={styles.disconnectBtn} onPress={disconnect}>
-          <Text style={styles.disconnectText}>×</Text>
-        </TouchableOpacity>
-      </View>
+      </TouchableOpacity>
     );
   }
 
@@ -130,21 +129,5 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     fontFamily: FONT.medium,
     fontSize: 13,
-  },
-  disconnectBtn: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: COLORS.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.cardBorder,
-  },
-  disconnectText: {
-    color: COLORS.textSecondary,
-    fontSize: 16,
-    lineHeight: 18,
-    fontFamily: FONT.bold,
   },
 });

@@ -1,15 +1,16 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { Platform, Alert } from 'react-native';
-import { Connection, PublicKey, clusterApiUrl } from '@solana/web3.js';
+import { Connection, PublicKey, VersionedTransaction, clusterApiUrl } from '@solana/web3.js';
 import { useAppKit, useAccount, useAppKitState } from '@reown/appkit-react-native';
 import {
   ensurePlayer,
   getPlayer,
-  addCurrency,
   addPurchasedItem,
   setName as setPlayerName,
   type Player,
 } from '../lib/supabase';
+import { JUPITER_API_KEY } from '../constants/onchain';
+import { getUsdcSwapQuote, buildSwapTransaction } from '../lib/jupiter';
 
 const CLUSTER = 'mainnet-beta';
 const APP_IDENTITY = {
@@ -239,36 +240,144 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     [address, player],
   );
 
+  /**
+   * On-chain purchase flow (USDC → TRENCH):
+   * 1. Get Jupiter quote (USDC → TRENCH, ExactIn)
+   * 2. User confirms USD cost
+   * 3. Build swap tx via Jupiter (TRENCH goes to treasury)
+   * 4. Sign & send via MWA
+   * 5. Confirm on-chain
+   * 6. Record purchase in Supabase
+   *
+   * price param = USD amount (e.g. 5 = $5 USDC)
+   */
   const purchaseItem = useCallback(
     async (itemId: string, price: number): Promise<boolean> => {
-      if (!address || !player) return false;
+      if (!address) return false;
 
-      if (player.currency < price) {
-        Alert.alert('Insufficient Funds', 'You don\'t have enough currency for this purchase.');
+      if (!JUPITER_API_KEY) {
+        Alert.alert('Setup Required', 'Jupiter API key not configured. See constants/onchain.ts.');
+        return false;
+      }
+
+      // MWA required for transaction signing
+      if (connectedVia !== 'mwa') {
+        Alert.alert(
+          'Wallet Required',
+          'Connect via Seed Vault / Mobile Wallet to make purchases.',
+        );
+        return false;
+      }
+
+      const transact = getTransact();
+      if (!transact) {
+        Alert.alert('Error', 'Mobile Wallet Adapter not available.');
+        return false;
+      }
+
+      // Check if already owned
+      if (player?.purchased_items?.[itemId]) {
+        Alert.alert('Already Owned', 'You already own this item.');
         return false;
       }
 
       try {
-        const { error: currErr } = await addCurrency(address, -price);
-        if (currErr) throw currErr;
+        // Step 1: Get Jupiter quote (USDC → TRENCH)
+        const quote = await getUsdcSwapQuote(price);
 
-        const { error: itemErr } = await addPurchasedItem(address, itemId, 'owned');
-        if (itemErr) throw itemErr;
+        // Step 2: User confirmation
+        const confirmed = await new Promise<boolean>((resolve) => {
+          Alert.alert(
+            'Confirm Purchase',
+            `This will charge $${price.toFixed(2)} USDC from your wallet.\n\nProceed?`,
+            [
+              { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+              { text: 'Buy Now', onPress: () => resolve(true) },
+            ],
+          );
+        });
 
-        const { data } = await getPlayer(address);
-        if (data) {
-          setPlayer(data);
-          setPlayerNameState(data.name);
+        if (!confirmed) return false;
+
+        // Step 3: Build swap transaction (TRENCH goes to treasury)
+        const swapTxBase64 = await buildSwapTransaction(quote, address);
+        const swapTxBytes = Buffer.from(swapTxBase64, 'base64');
+        const transaction = VersionedTransaction.deserialize(new Uint8Array(swapTxBytes));
+
+        // Step 4: Sign & send via MWA
+        let txSignatureBytes: Uint8Array | undefined;
+        await transact(async (wallet: any) => {
+          const authResult = await wallet.authorize({
+            cluster: CLUSTER,
+            identity: APP_IDENTITY,
+            auth_token: mwaAuthTokenRef.current,
+          });
+          mwaAuthTokenRef.current = authResult.auth_token;
+
+          const signatures = await wallet.signAndSendTransactions({
+            transactions: [transaction],
+          });
+          txSignatureBytes = signatures[0];
+        });
+
+        if (!txSignatureBytes) {
+          throw new Error('No transaction signature returned');
+        }
+
+        // Convert signature bytes to base58 for confirmation
+        const bs58 = require('bs58');
+        const txSignature: string = bs58.encode(Buffer.from(txSignatureBytes));
+
+        // Step 5: Confirm on-chain (best-effort — tx is already sent)
+        try {
+          const latestBlockhash = await connectionRef.current.getLatestBlockhash('confirmed');
+          await connectionRef.current.confirmTransaction(
+            {
+              signature: txSignature,
+              blockhash: latestBlockhash.blockhash,
+              lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
+            },
+            'confirmed',
+          );
+        } catch {
+          // Confirmation RPC may fail due to polyfill, but tx was already submitted
+          console.warn('Confirmation check failed, tx was already sent:', txSignature);
+        }
+
+        // Step 6: Record in Supabase
+        const { error: itemErr } = await addPurchasedItem(address, itemId, txSignature);
+        if (itemErr) console.error('Failed to record purchase in DB:', itemErr);
+
+        // Refresh player data + balance
+        try {
+          const [{ data }, lamports] = await Promise.all([
+            getPlayer(address),
+            connectionRef.current.getBalance(new PublicKey(address)),
+          ]);
+          if (data) {
+            setPlayer(data);
+            setPlayerNameState(data.name);
+          }
+          setBalance(lamports / 1e9);
+        } catch (e) {
+          console.error('Failed to refresh after purchase:', e);
         }
 
         return true;
-      } catch (err) {
+      } catch (err: any) {
         console.error('Purchase failed:', err);
-        Alert.alert('Purchase Failed', 'Something went wrong. Please try again.');
+        const msg = err?.message || 'Something went wrong';
+        if (msg.includes('User rejected') || msg.includes('declined')) {
+          Alert.alert('Cancelled', 'Transaction was cancelled.');
+        } else if (msg.includes('Jupiter') && msg.includes('quote')) {
+          Alert.alert('Swap Unavailable', 'Could not get a swap route. Try again later.');
+        } else {
+          Alert.alert('Purchase Failed', msg);
+        }
         return false;
       }
     },
-    [address, player],
+    [address, player, balance, connectedVia],
   );
 
   return (

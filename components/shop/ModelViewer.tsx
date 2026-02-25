@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { View, ActivityIndicator, StyleSheet, Text, Platform } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, ActivityIndicator, StyleSheet, Text, Platform, Image, Animated, ImageSourcePropType } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { COLORS, FONT } from '../../constants/theme';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const MODEL_BASE_URL = 'https://trenchesgame.com';
 
@@ -9,13 +10,25 @@ interface ModelViewerProps {
   modelFile: string;
   cameraOrbit?: string;
   bgGradient: [string, string, string];
+  thumbnail?: ImageSourcePropType;
 }
 
-export function ModelViewer({ modelFile, cameraOrbit, bgGradient }: ModelViewerProps) {
+export function ModelViewer({ modelFile, cameraOrbit, bgGradient, thumbnail }: ModelViewerProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [bg1, bg2, bg3] = bgGradient;
   const orbit = cameraOrbit || '45deg 75deg 5m';
+  const thumbOpacity = useRef(new Animated.Value(1)).current;
+
+  const onModelLoaded = () => {
+    setLoading(false);
+    // Fade out thumbnail to reveal 3D model underneath
+    Animated.timing(thumbOpacity, {
+      toValue: 0,
+      duration: 600,
+      useNativeDriver: true,
+    }).start();
+  };
 
   const html = `<!DOCTYPE html>
 <html><head>
@@ -82,12 +95,26 @@ setTimeout(function(){
         androidLayerType="hardware"
         onMessage={(event) => {
           const msg = event.nativeEvent.data;
-          if (msg === 'loaded') setLoading(false);
+          if (msg === 'loaded') onModelLoaded();
           if (msg.startsWith('error')) { setLoading(false); setError(true); }
         }}
         onError={() => { setLoading(false); setError(true); }}
       />
-      {loading && !error && (
+      {/* Thumbnail shown immediately, fades out when 3D loads */}
+      {thumbnail && (
+        <Animated.View style={[styles.thumbnailOverlay, { opacity: thumbOpacity }]} pointerEvents={loading ? 'auto' : 'none'}>
+          <LinearGradient colors={[bg1, bg2, bg3]} style={StyleSheet.absoluteFill} />
+          <Image source={thumbnail} style={styles.thumbnailImage} resizeMode="contain" />
+          {loading && !error && (
+            <View style={styles.thumbSpinner}>
+              <ActivityIndicator color={COLORS.primary} size="small" />
+              <Text style={styles.loadingText}>Loading 3D...</Text>
+            </View>
+          )}
+        </Animated.View>
+      )}
+      {/* Fallback spinner if no thumbnail */}
+      {!thumbnail && loading && !error && (
         <View style={styles.loadingOverlay} pointerEvents="none">
           <ActivityIndicator color={COLORS.primary} size="small" />
           <Text style={styles.loadingText}>Loading 3D Model...</Text>
@@ -112,6 +139,27 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     gap: 8,
+  },
+  thumbnailOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  thumbnailImage: {
+    width: '100%',
+    height: '100%',
+  },
+  thumbSpinner: {
+    position: 'absolute',
+    bottom: 16,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
   },
   loadingText: {
     color: 'rgba(255,255,255,0.5)',
