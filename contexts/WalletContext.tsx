@@ -18,16 +18,30 @@ const APP_IDENTITY = {
   icon: 'favicon.ico',
 };
 
-// Lazy-load MWA to avoid crashes when native module isn't available
+// Lazy-load MWA transact — must verify native module exists BEFORE require()
+// because the MWA package uses TurboModuleRegistry.getEnforcing() at module scope
+// which throws a fatal error if the native module isn't registered.
 let mwaTransact: any = null;
+let mwaChecked = false;
 function getTransact() {
   if (mwaTransact) return mwaTransact;
-  if (Platform.OS !== 'web') {
-    try {
-      mwaTransact = require('@solana-mobile/mobile-wallet-adapter-protocol-web3js').transact;
-    } catch {
-      mwaTransact = null;
-    }
+  if (mwaChecked) return null; // already checked and failed
+  if (Platform.OS === 'web') { mwaChecked = true; return null; }
+
+  // Check native module exists BEFORE requiring the JS package
+  const { TurboModuleRegistry } = require('react-native');
+  if (!TurboModuleRegistry.get('SolanaMobileWalletAdapter')) {
+    mwaChecked = true;
+    return null;
+  }
+
+  try {
+    const mod = require('@solana-mobile/mobile-wallet-adapter-protocol-web3js');
+    mwaTransact = mod.transact;
+  } catch (e) {
+    console.warn('[MWA] require failed:', e);
+    mwaTransact = null;
+    mwaChecked = true;
   }
   return mwaTransact;
 }
@@ -107,7 +121,17 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
           identity: APP_IDENTITY,
         });
 
-        const pubkey = new PublicKey(authResult.accounts[0].address);
+        // MWA protocol returns address as base64 string — decode to bytes for PublicKey
+        const rawAddr = authResult.accounts[0].address;
+        let pubkey: PublicKey;
+        if (typeof rawAddr === 'string') {
+          // Base64 string from MWA protocol
+          const bytes = Buffer.from(rawAddr, 'base64');
+          pubkey = new PublicKey(bytes);
+        } else {
+          // Uint8Array (some versions)
+          pubkey = new PublicKey(new Uint8Array(rawAddr));
+        }
         const addr = pubkey.toBase58();
         mwaAuthTokenRef.current = authResult.auth_token;
         setMwaAddress(addr);

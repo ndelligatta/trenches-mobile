@@ -23,7 +23,7 @@ export function WalletButton() {
 
   if (connected) {
     return (
-      <TouchableOpacity style={styles.connectedContainer} onPress={disconnect}>
+      <View style={styles.connectedContainer}>
         <View style={styles.balanceRow}>
           <Text style={styles.balanceText}>
             {balance !== null ? `${balance.toFixed(2)} SOL` : '---'}
@@ -33,7 +33,10 @@ export function WalletButton() {
           <View style={styles.dot} />
           <Text style={styles.addressText}>{displayName}</Text>
         </View>
-      </TouchableOpacity>
+        <TouchableOpacity style={styles.disconnectBtn} onPress={disconnect}>
+          <Text style={styles.disconnectText}>×</Text>
+        </TouchableOpacity>
+      </View>
     );
   }
 
@@ -127,5 +130,21 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     fontFamily: FONT.medium,
     fontSize: 13,
+  },
+  disconnectBtn: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: COLORS.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.cardBorder,
+  },
+  disconnectText: {
+    color: COLORS.textSecondary,
+    fontSize: 16,
+    lineHeight: 18,
+    fontFamily: FONT.bold,
   },
 });
