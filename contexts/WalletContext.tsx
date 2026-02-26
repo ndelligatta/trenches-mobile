@@ -1,16 +1,23 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { Platform, Alert } from 'react-native';
 import { Connection, PublicKey, VersionedTransaction, clusterApiUrl } from '@solana/web3.js';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAppKit, useAccount, useAppKitState } from '@reown/appkit-react-native';
 import {
   ensurePlayer,
   getPlayer,
-  addPurchasedItem,
+  verifyPurchase,
+  openPack,
   setName as setPlayerName,
   type Player,
+  type VerifyPurchaseResult,
+  type OpenPackResult,
 } from '../lib/supabase';
 import { JUPITER_API_KEY } from '../constants/onchain';
 import { getUsdcSwapQuote, buildSwapTransaction } from '../lib/jupiter';
+
+const MWA_ADDRESS_KEY = '@trenches_mwa_address';
+const MWA_AUTH_TOKEN_KEY = '@trenches_mwa_auth_token';
 
 const CLUSTER = 'mainnet-beta';
 const APP_IDENTITY = {
@@ -60,7 +67,8 @@ interface WalletContextType {
   disconnect: () => void;
   refreshPlayer: () => Promise<void>;
   updatePlayerName: (name: string) => Promise<void>;
-  purchaseItem: (itemId: string, price: number) => Promise<boolean>;
+  purchaseItem: (itemId: string, price: number) => Promise<VerifyPurchaseResult | boolean>;
+  purchasePack: (packId: string, price: number) => Promise<OpenPackResult | false>;
   connection: Connection;
   connectedVia: 'mwa' | 'appkit' | null;
 }
@@ -85,6 +93,20 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
 
   const connectionRef = useRef(new Connection(clusterApiUrl(CLUSTER)));
   const prevAddressRef = useRef<string | undefined>(undefined);
+
+  // Restore saved MWA wallet on mount
+  useEffect(() => {
+    (async () => {
+      try {
+        const savedAddr = await AsyncStorage.getItem(MWA_ADDRESS_KEY);
+        const savedToken = await AsyncStorage.getItem(MWA_AUTH_TOKEN_KEY);
+        if (savedAddr) {
+          setMwaAddress(savedAddr);
+          mwaAuthTokenRef.current = savedToken;
+        }
+      } catch {}
+    })();
+  }, []);
 
   // Determine active connection: MWA takes priority
   const connectedVia: 'mwa' | 'appkit' | null = mwaAddress
@@ -136,6 +158,11 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         const addr = pubkey.toBase58();
         mwaAuthTokenRef.current = authResult.auth_token;
         setMwaAddress(addr);
+        // Persist wallet address + auth token
+        AsyncStorage.setItem(MWA_ADDRESS_KEY, addr).catch(() => {});
+        if (authResult.auth_token) {
+          AsyncStorage.setItem(MWA_AUTH_TOKEN_KEY, authResult.auth_token).catch(() => {});
+        }
       });
     } catch (err) {
       console.error('MWA connection failed:', err);
@@ -153,6 +180,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     if (mwaAddress) {
       mwaAuthTokenRef.current = null;
       setMwaAddress(null);
+      AsyncStorage.multiRemove([MWA_ADDRESS_KEY, MWA_AUTH_TOKEN_KEY]).catch(() => {});
     }
     if (appKitConnected) {
       appKitDisconnect();
@@ -252,40 +280,43 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
    * price param = USD amount (e.g. 5 = $5 USDC)
    */
   const purchaseItem = useCallback(
-    async (itemId: string, price: number): Promise<boolean> => {
-      if (!address) return false;
+    async (itemId: string, price: number): Promise<VerifyPurchaseResult | boolean> => {
+      console.log(`[PURCHASE] ========== START ==========`);
+      console.log(`[PURCHASE] itemId=${itemId}, price=$${price}, wallet=${address}, connectedVia=${connectedVia}`);
+
+      if (!address) { console.log('[PURCHASE] ABORT: no address'); return false; }
 
       if (!JUPITER_API_KEY) {
+        console.log('[PURCHASE] ABORT: no Jupiter API key');
         Alert.alert('Setup Required', 'Jupiter API key not configured. See constants/onchain.ts.');
         return false;
       }
 
-      // MWA required for transaction signing
       if (connectedVia !== 'mwa') {
-        Alert.alert(
-          'Wallet Required',
-          'Connect via Seed Vault / Mobile Wallet to make purchases.',
-        );
+        console.log('[PURCHASE] ABORT: not connected via MWA, connectedVia=' + connectedVia);
+        Alert.alert('Wallet Required', 'Connect via Seed Vault / Mobile Wallet to make purchases.');
         return false;
       }
 
       const transact = getTransact();
       if (!transact) {
+        console.log('[PURCHASE] ABORT: MWA transact() not available');
         Alert.alert('Error', 'Mobile Wallet Adapter not available.');
         return false;
       }
 
-      // Check if already owned
-      if (player?.purchased_items?.[itemId]) {
-        Alert.alert('Already Owned', 'You already own this item.');
-        return false;
-      }
+      // No client-side "already owned" check — the edge function handles duplicates
+      // and some items can be bought multiple times (different serial numbers)
 
       try {
         // Step 1: Get Jupiter quote (USDC → TRENCH)
+        console.log(`[PURCHASE] Step 1: Getting Jupiter quote for $${price} USDC...`);
+        const quoteStart = Date.now();
         const quote = await getUsdcSwapQuote(price);
+        console.log(`[PURCHASE] Step 1 DONE in ${Date.now() - quoteStart}ms — inAmount=${quote.inAmount}, outAmount=${quote.outAmount}`);
 
         // Step 2: User confirmation
+        console.log('[PURCHASE] Step 2: Waiting for user confirmation...');
         const confirmed = await new Promise<boolean>((resolve) => {
           Alert.alert(
             'Confirm Purchase',
@@ -297,14 +328,210 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
           );
         });
 
-        if (!confirmed) return false;
+        if (!confirmed) { console.log('[PURCHASE] ABORT: user cancelled'); return false; }
+        console.log('[PURCHASE] Step 2 DONE: user confirmed');
 
         // Step 3: Build swap transaction (TRENCH goes to treasury)
+        console.log('[PURCHASE] Step 3: Building swap transaction...');
+        const buildStart = Date.now();
+        const swapTxBase64 = await buildSwapTransaction(quote, address);
+        console.log(`[PURCHASE] Step 3 DONE in ${Date.now() - buildStart}ms — tx base64 length=${swapTxBase64.length}`);
+        const swapTxBytes = Buffer.from(swapTxBase64, 'base64');
+        const transaction = VersionedTransaction.deserialize(new Uint8Array(swapTxBytes));
+
+        // Step 4: Sign & send via MWA
+        console.log('[PURCHASE] Step 4: Opening MWA for signing...');
+        const mwaStart = Date.now();
+        let txSignatureBytes: Uint8Array | undefined;
+        await transact(async (wallet: any) => {
+          console.log('[PURCHASE] Step 4a: Authorizing with MWA wallet...');
+          const authResult = await wallet.authorize({
+            cluster: CLUSTER,
+            identity: APP_IDENTITY,
+            auth_token: mwaAuthTokenRef.current,
+          });
+          mwaAuthTokenRef.current = authResult.auth_token;
+          if (authResult.auth_token) {
+            AsyncStorage.setItem(MWA_AUTH_TOKEN_KEY, authResult.auth_token).catch(() => {});
+          }
+          console.log('[PURCHASE] Step 4b: Signing and sending transaction...');
+          const signatures = await wallet.signAndSendTransactions({
+            transactions: [transaction],
+          });
+          txSignatureBytes = signatures[0];
+          console.log(`[PURCHASE] Step 4c: Got signature bytes, length=${txSignatureBytes?.length}`);
+        });
+        console.log(`[PURCHASE] Step 4 DONE: MWA returned in ${Date.now() - mwaStart}ms`);
+
+        if (!txSignatureBytes) {
+          throw new Error('No transaction signature returned');
+        }
+
+        // MWA signAndSendTransactions returns the tx signature.
+        // On Seeker/Saga it comes back as a BASE58 STRING already (not base64, not raw bytes).
+        // If it's a Uint8Array, encode it to base58. If it's a string, use it directly.
+        const bs58 = require('bs58');
+        let txSignature: string;
+        if (typeof txSignatureBytes === 'string') {
+          // MWA returned a string — it's already base58
+          txSignature = txSignatureBytes;
+          console.log(`[PURCHASE] Signature is string (base58), length=${txSignature.length}`);
+        } else {
+          // Raw bytes — encode to base58
+          const sigBytes = new Uint8Array(txSignatureBytes);
+          console.log(`[PURCHASE] Signature is Uint8Array, length=${sigBytes.length}`);
+          txSignature = bs58.encode(sigBytes);
+        }
+        console.log(`[PURCHASE] Transaction signature: ${txSignature} (len=${txSignature.length})`);
+
+        // After MWA returns, Android needs time to restore networking AND
+        // the transaction needs time to propagate across Solana validators.
+        console.log('[PURCHASE] Step 5: Waiting 5s for Android networking + Solana tx propagation...');
+        await new Promise(r => setTimeout(r, 5000));
+        console.log('[PURCHASE] Step 5: 5s wait done, starting network calls with retry logic...');
+
+        // Retry helper — retries with delay when calls fail after MWA
+        const retry = async <T,>(label: string, fn: () => Promise<T>, attempts = 5, delayMs = 2000): Promise<T> => {
+          for (let i = 0; i < attempts; i++) {
+            try {
+              console.log(`[PURCHASE] [${label}] attempt ${i + 1}/${attempts}...`);
+              const start = Date.now();
+              const result = await fn();
+              console.log(`[PURCHASE] [${label}] attempt ${i + 1} SUCCESS in ${Date.now() - start}ms`);
+              return result;
+            } catch (err: any) {
+              console.warn(`[PURCHASE] [${label}] attempt ${i + 1} FAILED: ${err?.message?.slice(0, 120)}`);
+              // Non-retryable errors (e.g. edge function says "sold out") — fail immediately
+              if (err?.nonRetryable) {
+                console.error(`[PURCHASE] [${label}] NON-RETRYABLE — stopping`);
+                throw err;
+              }
+              if (i < attempts - 1) {
+                console.log(`[PURCHASE] [${label}] waiting ${delayMs}ms before retry...`);
+                await new Promise(r => setTimeout(r, delayMs));
+                continue;
+              }
+              throw err;
+            }
+          }
+          throw new Error('All retries exhausted');
+        };
+
+        // Step 6: Verify purchase and assign numbered unit via Edge Function
+        // This is the ONLY purchase path — no legacy fallback. If this fails, user sees the error.
+        console.log('[PURCHASE] Step 6: Calling verify-purchase Edge Function...');
+        // 8 attempts, 3s apart = up to 24s of retrying for tx propagation
+        const verifyResult = await retry('verify-purchase', async () => {
+          const result = await verifyPurchase(txSignature, address, itemId, price);
+          console.log(`[PURCHASE] [verify-purchase] response: ${JSON.stringify(result).slice(0, 300)}`);
+          if (result?.error) {
+            // Retryable: tx hasn't propagated to Solana yet
+            if (result.error.includes('not found') || result.error.includes('confirming')) {
+              throw new Error(result.error);
+            }
+            // Non-retryable: bad signature, insufficient funds, sold out, etc.
+            const fatal = new Error(result.error);
+            (fatal as any).nonRetryable = true;
+            throw fatal;
+          }
+          if (!result?.success) {
+            const fatal = new Error('Edge function returned no success flag');
+            (fatal as any).nonRetryable = true;
+            throw fatal;
+          }
+          return result;
+        }, 8, 3000);
+
+        console.log(`[PURCHASE] Step 6 SUCCESS: ${verifyResult.name} #${verifyResult.serial_number} (unit_id=${verifyResult.unit_id})`);
+
+        // Step 7: Refresh balance
+        console.log('[PURCHASE] Step 7: Refreshing balance...');
+        try {
+          const lamports = await retry('balance', () =>
+            connectionRef.current.getBalance(new PublicKey(address))
+          );
+          setBalance(lamports / 1e9);
+          console.log(`[PURCHASE] Step 7 SUCCESS: balance=${lamports / 1e9} SOL`);
+        } catch (e: any) {
+          console.error(`[PURCHASE] Step 7 balance refresh failed (non-critical): ${e?.message}`);
+        }
+
+        console.log(`[PURCHASE] ========== COMPLETE ==========`);
+        return verifyResult;
+      } catch (err: any) {
+        console.error(`[PURCHASE] ========== FATAL ERROR: ${err?.message} ==========`);
+        console.error('[PURCHASE] Full error:', err);
+        const msg = err?.message || 'Something went wrong';
+        if (msg.includes('User rejected') || msg.includes('declined')) {
+          Alert.alert('Cancelled', 'Transaction was cancelled.');
+        } else if (msg.includes('Jupiter') && msg.includes('quote')) {
+          Alert.alert('Swap Unavailable', 'Could not get a swap route. Try again later.');
+        } else {
+          Alert.alert('Purchase Failed', msg);
+        }
+        return false;
+      }
+    },
+    [address, player, balance, connectedVia],
+  );
+
+  /**
+   * Pack purchase flow — same on-chain flow as purchaseItem but calls open-pack
+   * edge function instead of verify-purchase.
+   */
+  const purchasePack = useCallback(
+    async (packId: string, price: number): Promise<OpenPackResult | false> => {
+      console.log(`[PACK] ========== START ==========`);
+      console.log(`[PACK] packId=${packId}, price=$${price}, wallet=${address}, connectedVia=${connectedVia}`);
+
+      if (!address) { console.log('[PACK] ABORT: no address'); return false; }
+
+      if (!JUPITER_API_KEY) {
+        console.log('[PACK] ABORT: no Jupiter API key');
+        Alert.alert('Setup Required', 'Jupiter API key not configured.');
+        return false;
+      }
+
+      if (connectedVia !== 'mwa') {
+        console.log('[PACK] ABORT: not connected via MWA');
+        Alert.alert('Wallet Required', 'Connect via Seed Vault / Mobile Wallet to open packs.');
+        return false;
+      }
+
+      const transact = getTransact();
+      if (!transact) {
+        Alert.alert('Error', 'Mobile Wallet Adapter not available.');
+        return false;
+      }
+
+      try {
+        // Step 1: Get Jupiter quote
+        console.log(`[PACK] Step 1: Getting Jupiter quote for $${price} USDC...`);
+        const quote = await getUsdcSwapQuote(price);
+        console.log(`[PACK] Step 1 DONE — inAmount=${quote.inAmount}, outAmount=${quote.outAmount}`);
+
+        // Step 2: User confirmation
+        const confirmed = await new Promise<boolean>((resolve) => {
+          Alert.alert(
+            'Open Pack',
+            `This will charge $${price.toFixed(2)} USDC to open a pack.\n\nProceed?`,
+            [
+              { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+              { text: 'Open Pack', onPress: () => resolve(true) },
+            ],
+          );
+        });
+
+        if (!confirmed) { console.log('[PACK] ABORT: user cancelled'); return false; }
+
+        // Step 3: Build swap tx
+        console.log('[PACK] Step 3: Building swap transaction...');
         const swapTxBase64 = await buildSwapTransaction(quote, address);
         const swapTxBytes = Buffer.from(swapTxBase64, 'base64');
         const transaction = VersionedTransaction.deserialize(new Uint8Array(swapTxBytes));
 
         // Step 4: Sign & send via MWA
+        console.log('[PACK] Step 4: Opening MWA for signing...');
         let txSignatureBytes: Uint8Array | undefined;
         await transact(async (wallet: any) => {
           const authResult = await wallet.authorize({
@@ -313,66 +540,91 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
             auth_token: mwaAuthTokenRef.current,
           });
           mwaAuthTokenRef.current = authResult.auth_token;
-
+          if (authResult.auth_token) {
+            AsyncStorage.setItem(MWA_AUTH_TOKEN_KEY, authResult.auth_token).catch(() => {});
+          }
           const signatures = await wallet.signAndSendTransactions({
             transactions: [transaction],
           });
           txSignatureBytes = signatures[0];
         });
 
-        if (!txSignatureBytes) {
-          throw new Error('No transaction signature returned');
-        }
+        if (!txSignatureBytes) throw new Error('No transaction signature returned');
 
-        // Convert signature bytes to base58 for confirmation
         const bs58 = require('bs58');
-        const txSignature: string = bs58.encode(Buffer.from(txSignatureBytes));
-
-        // Step 5: Confirm on-chain (best-effort — tx is already sent)
-        try {
-          const latestBlockhash = await connectionRef.current.getLatestBlockhash('confirmed');
-          await connectionRef.current.confirmTransaction(
-            {
-              signature: txSignature,
-              blockhash: latestBlockhash.blockhash,
-              lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
-            },
-            'confirmed',
-          );
-        } catch {
-          // Confirmation RPC may fail due to polyfill, but tx was already submitted
-          console.warn('Confirmation check failed, tx was already sent:', txSignature);
+        let txSignature: string;
+        if (typeof txSignatureBytes === 'string') {
+          txSignature = txSignatureBytes;
+        } else {
+          txSignature = bs58.encode(new Uint8Array(txSignatureBytes));
         }
+        console.log(`[PACK] Transaction signature: ${txSignature}`);
 
-        // Step 6: Record in Supabase
-        const { error: itemErr } = await addPurchasedItem(address, itemId, txSignature);
-        if (itemErr) console.error('Failed to record purchase in DB:', itemErr);
+        // Step 5: Wait for propagation
+        console.log('[PACK] Step 5: Waiting 5s for tx propagation...');
+        await new Promise(r => setTimeout(r, 5000));
 
-        // Refresh player data + balance
-        try {
-          const [{ data }, lamports] = await Promise.all([
-            getPlayer(address),
-            connectionRef.current.getBalance(new PublicKey(address)),
-          ]);
-          if (data) {
-            setPlayer(data);
-            setPlayerNameState(data.name);
+        // Retry helper
+        const retry = async <T,>(label: string, fn: () => Promise<T>, attempts = 8, delayMs = 3000): Promise<T> => {
+          for (let i = 0; i < attempts; i++) {
+            try {
+              console.log(`[PACK] [${label}] attempt ${i + 1}/${attempts}...`);
+              const result = await fn();
+              console.log(`[PACK] [${label}] attempt ${i + 1} SUCCESS`);
+              return result;
+            } catch (err: any) {
+              console.warn(`[PACK] [${label}] attempt ${i + 1} FAILED: ${err?.message?.slice(0, 120)}`);
+              if (err?.nonRetryable) throw err;
+              if (i < attempts - 1) {
+                await new Promise(r => setTimeout(r, delayMs));
+                continue;
+              }
+              throw err;
+            }
           }
-          setBalance(lamports / 1e9);
-        } catch (e) {
-          console.error('Failed to refresh after purchase:', e);
-        }
+          throw new Error('All retries exhausted');
+        };
 
-        return true;
+        // Step 6: Call open-pack edge function
+        console.log('[PACK] Step 6: Calling open-pack Edge Function...');
+        const packResult = await retry('open-pack', async () => {
+          const result = await openPack(txSignature, address, packId, price);
+          console.log(`[PACK] [open-pack] response: ${JSON.stringify(result).slice(0, 300)}`);
+          if (result?.error) {
+            if (result.error.includes('not found') || result.error.includes('confirming')) {
+              throw new Error(result.error);
+            }
+            const fatal = new Error(result.error);
+            (fatal as any).nonRetryable = true;
+            throw fatal;
+          }
+          if (!result?.success) {
+            const fatal = new Error('Edge function returned no success flag');
+            (fatal as any).nonRetryable = true;
+            throw fatal;
+          }
+          return result;
+        });
+
+        console.log(`[PACK] Step 6 SUCCESS: ${packResult.name} #${packResult.serial_number}`);
+
+        // Step 7: Refresh balance
+        try {
+          const lamports = await connectionRef.current.getBalance(new PublicKey(address));
+          setBalance(lamports / 1e9);
+        } catch {}
+
+        console.log(`[PACK] ========== COMPLETE ==========`);
+        return packResult;
       } catch (err: any) {
-        console.error('Purchase failed:', err);
+        console.error(`[PACK] ========== FATAL ERROR: ${err?.message} ==========`);
         const msg = err?.message || 'Something went wrong';
         if (msg.includes('User rejected') || msg.includes('declined')) {
           Alert.alert('Cancelled', 'Transaction was cancelled.');
         } else if (msg.includes('Jupiter') && msg.includes('quote')) {
           Alert.alert('Swap Unavailable', 'Could not get a swap route. Try again later.');
         } else {
-          Alert.alert('Purchase Failed', msg);
+          Alert.alert('Pack Opening Failed', msg);
         }
         return false;
       }
@@ -396,6 +648,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         refreshPlayer,
         updatePlayerName,
         purchaseItem,
+        purchasePack,
         connection: connectionRef.current,
         connectedVia,
       }}

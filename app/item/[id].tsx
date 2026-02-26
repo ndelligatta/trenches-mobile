@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -18,6 +18,7 @@ import { getItemById, ITEM_COLORS } from '../../constants/items';
 import { COLORS, FONT, SPACING, RARITY_COLORS } from '../../constants/theme';
 import { useWallet } from '../../contexts/WalletContext';
 import { ModelViewer } from '../../components/shop/ModelViewer';
+import { getSkinTypeSupply, getPlayerUnits, type SkinTypeSupply } from '../../lib/supabase';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const PREVIEW_HEIGHT = Math.min(SCREEN_WIDTH * 0.85, 340);
@@ -25,8 +26,48 @@ const PREVIEW_HEIGHT = Math.min(SCREEN_WIDTH * 0.85, 340);
 export default function ItemDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
-  const { connected, connectMWA, purchaseItem } = useWallet();
+  const { connected, connectMWA, purchaseItem, address } = useWallet();
   const [purchasing, setPurchasing] = useState(false);
+  const [supply, setSupply] = useState<SkinTypeSupply | null>(null);
+  const [supplyLoading, setSupplyLoading] = useState(true);
+  const [owned, setOwned] = useState(false);
+  const [ownedSerial, setOwnedSerial] = useState<number | null>(null);
+
+  // Fetch supply info for this item
+  useEffect(() => {
+    if (!id) return;
+    let cancelled = false;
+    (async () => {
+      setSupplyLoading(true);
+      try {
+        const { data, error } = await getSkinTypeSupply(id);
+        if (!cancelled && data) setSupply(data);
+      } catch {
+        // Supply info not available — item may not be in scarcity system yet
+      }
+      if (!cancelled) setSupplyLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, [id]);
+
+  // Check if player already owns this item (via unit scarcity system only)
+  useEffect(() => {
+    if (!id || !address) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data: units } = await getPlayerUnits(address);
+        if (!cancelled && units) {
+          const match = units.find(u => u.skin_type_id === id);
+          if (match) {
+            setOwned(true);
+            setOwnedSerial(match.serial_number);
+          }
+        }
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, [id, address]);
 
   const item = getItemById(id);
 
@@ -46,16 +87,34 @@ export default function ItemDetailScreen() {
   const isNotForSale = item.price === -1;
   const has3DModel = !!item.model && Platform.OS !== 'web';
 
+  const isSoldOut = supply ? supply.units_available <= 0 : false;
+
   const handlePurchase = async () => {
     if (!connected) {
       connectMWA();
       return;
     }
 
+    if (isSoldOut) {
+      Alert.alert('Sold Out', 'This item is no longer available.');
+      return;
+    }
+
     setPurchasing(true);
     try {
-      const success = await purchaseItem(item.id, item.price);
-      if (success) {
+      const result = await purchaseItem(item.id, item.price / 100);
+      if (result && typeof result === 'object' && result.success) {
+        setOwned(true);
+        setOwnedSerial(result.serial_number);
+        Alert.alert(
+          'Purchase Complete!',
+          `${result.name} #${result.serial_number} has been added to your inventory.\n\nUnit ${result.serial_number} of ${result.max_supply}`,
+        );
+        // Refresh supply count
+        const { data } = await getSkinTypeSupply(item.id);
+        if (data) setSupply(data);
+      } else if (result === true) {
+        setOwned(true);
         Alert.alert(
           'Purchase Complete!',
           `${item.name} has been added to your inventory.\n\nThe transaction has been confirmed on-chain.`,
@@ -151,8 +210,12 @@ export default function ItemDetailScreen() {
           {/* Stats row */}
           <View style={styles.statsRow}>
             <View style={styles.stat}>
-              <Text style={styles.statValue}>{item.rarity === 'mythic' ? '1' : '∞'}</Text>
-              <Text style={styles.statLabel}>Supply</Text>
+              <Text style={styles.statValue}>
+                {supply
+                  ? `${supply.units_available}/${supply.max_supply}`
+                  : item.rarity === 'mythic' ? '1' : '∞'}
+              </Text>
+              <Text style={styles.statLabel}>{supply ? 'Remaining' : 'Supply'}</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.stat}>
@@ -193,10 +256,22 @@ export default function ItemDetailScreen() {
 
       {/* Purchase button */}
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + SPACING.md }]}>
-        {isNotForSale ? (
+        {owned ? (
+          <View style={[styles.purchaseButton, { backgroundColor: 'rgba(46,204,113,0.15)' }]}>
+            <Text style={[styles.purchaseText, { color: '#2ecc71' }]}>
+              {ownedSerial ? `OWNED — #${ownedSerial}` : 'OWNED'}
+            </Text>
+          </View>
+        ) : isNotForSale ? (
           <View style={[styles.purchaseButton, { backgroundColor: 'rgba(255,255,255,0.06)' }]}>
             <Text style={[styles.purchaseText, { color: COLORS.textMuted }]}>
               NOT FOR SALE
+            </Text>
+          </View>
+        ) : isSoldOut ? (
+          <View style={[styles.purchaseButton, { backgroundColor: 'rgba(231,76,60,0.15)' }]}>
+            <Text style={[styles.purchaseText, { color: COLORS.error }]}>
+              SOLD OUT
             </Text>
           </View>
         ) : (

@@ -19,9 +19,9 @@ import {
   PACKS,
   RARITY_COLORS,
   RARITY_GLOW,
-  selectRandomItem,
   type RewardItem,
 } from '../constants/packs';
+import { useWallet } from '../contexts/WalletContext';
 
 // Same base URL used by the working ModelViewer component
 const MODEL_BASE_URL = 'https://trenchesgame.com';
@@ -35,11 +35,15 @@ export default function PackOpeningScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { pack: packId } = useLocalSearchParams<{ pack: string }>();
+  const { connected, connectMWA, purchasePack } = useWallet();
 
   const pack = PACKS[packId ?? 'starter-pack'] ?? PACKS['starter-pack'];
+  // All packs $0.10 for testing (v1)
+  const packPriceUsdc = 0.10;
 
   const [stage, setStage] = useState<Stage>('ready');
   const [reward, setReward] = useState<RewardItem | null>(null);
+  const [purchasing, setPurchasing] = useState(false);
   const [chestLoaded, setChestLoaded] = useState(false);
   const [introDone, setIntroDone] = useState(false);
   const [loadSlow, setLoadSlow] = useState(false);
@@ -255,17 +259,44 @@ window.addEventListener('message', handleMsg);
     });
   }, [chestScale, chestOpacity, flashOpacity, cardScale, cardOpacity, cardRotateY, glowScale, glowOpacity, particleAnims]);
 
-  // OPEN PACK: tell WebView to play the chest opening animation
-  const openPack = useCallback(() => {
-    if (stage === 'opening') return;
-    setStage('opening');
+  // OPEN PACK: purchase on-chain → server rolls item → THEN animate
+  const handleOpenPack = useCallback(async () => {
+    if (stage === 'opening' || purchasing) return;
 
-    const item = selectRandomItem(pack.weights);
-    setReward(item);
+    if (!connected) {
+      connectMWA();
+      return;
+    }
 
-    // Tell the 3D chest to play its open animation
-    webviewRef.current?.postMessage(JSON.stringify({ action: 'playOpen' }));
-  }, [stage, pack]);
+    setPurchasing(true);
+    try {
+      const result = await purchasePack(packId ?? 'starter-pack', packPriceUsdc);
+      if (!result) {
+        // User cancelled or error — stay on ready stage
+        setPurchasing(false);
+        return;
+      }
+
+      // Server returned a real item — set reward, then play animation
+      const rewardItem: RewardItem = {
+        name: result.name,
+        type: result.rarity.charAt(0).toUpperCase() + result.rarity.slice(1) + ' Item',
+        rarity: result.rarity as RewardItem['rarity'],
+        img: result.image_url || `https://trenchesgame.com/${result.skin_type_id}.png`,
+        skinTypeId: result.skin_type_id,
+        serialNumber: result.serial_number,
+        maxSupply: result.max_supply,
+      };
+      setReward(rewardItem);
+      setStage('opening');
+
+      // Tell the 3D chest to play its open animation
+      webviewRef.current?.postMessage(JSON.stringify({ action: 'playOpen' }));
+    } catch (err: any) {
+      console.error('[PACK-OPENING] Error:', err?.message);
+    }
+    setPurchasing(false);
+  }, [stage, purchasing, connected, connectMWA, purchasePack, packId, packPriceUsdc]);
 
   const openAnother = useCallback(() => {
     resetAnims();
@@ -303,7 +334,7 @@ window.addEventListener('message', handleMsg);
       </View>
 
       <Text style={styles.subtitle}>
-        {stage === 'ready' ? 'Tap below to reveal your items' : stage === 'opening' ? 'Opening...' : ''}
+        {purchasing ? 'Processing payment...' : stage === 'ready' ? 'Tap below to reveal your items' : stage === 'opening' ? 'Opening...' : ''}
       </Text>
 
       {/* Main area */}
@@ -415,6 +446,9 @@ window.addEventListener('message', handleMsg);
             </View>
             <Text style={styles.cardName}>{reward.name.toUpperCase()}</Text>
             <Text style={[styles.cardType, { color: rarityColor }]}>{reward.type}</Text>
+            {reward.serialNumber != null && reward.maxSupply != null && (
+              <Text style={styles.cardSerial}>#{reward.serialNumber} of {reward.maxSupply}</Text>
+            )}
           </Animated.View>
         )}
       </View>
@@ -438,24 +472,39 @@ window.addEventListener('message', handleMsg);
       {/* Bottom actions */}
       <View style={[styles.bottomArea, { paddingBottom: insets.bottom + 16 }]}>
         {stage === 'ready' && (
-          <TouchableOpacity style={styles.openBtn} onPress={openPack} activeOpacity={0.8}>
+          <TouchableOpacity
+            style={styles.openBtn}
+            onPress={handleOpenPack}
+            activeOpacity={0.8}
+            disabled={purchasing}
+          >
             <LinearGradient
-              colors={['#A855F7', '#7C3AED']}
+              colors={purchasing ? ['#666', '#444'] : ['#A855F7', '#7C3AED']}
               style={styles.openBtnGrad}
             >
-              <Text style={styles.openBtnText}>OPEN PACK</Text>
+              {purchasing ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.openBtnText}>
+                  {connected ? `OPEN PACK — $${packPriceUsdc.toFixed(2)}` : 'LOGIN TO OPEN'}
+                </Text>
+              )}
             </LinearGradient>
           </TouchableOpacity>
         )}
 
         {stage === 'reveal' && (
           <View style={styles.revealActions}>
-            <TouchableOpacity style={styles.openAnotherBtn} onPress={openAnother} activeOpacity={0.8}>
+            <TouchableOpacity
+              style={styles.openAnotherBtn}
+              onPress={openAnother}
+              activeOpacity={0.8}
+            >
               <LinearGradient
                 colors={['#A855F7', '#7C3AED']}
                 style={styles.openBtnGrad}
               >
-                <Text style={styles.openBtnText}>OPEN ANOTHER</Text>
+                <Text style={styles.openBtnText}>OPEN ANOTHER — ${packPriceUsdc.toFixed(2)}</Text>
               </LinearGradient>
             </TouchableOpacity>
             <TouchableOpacity style={styles.backToShopBtn} onPress={() => router.back()}>
@@ -596,6 +645,13 @@ const styles = StyleSheet.create({
     fontFamily: FONT.medium,
     fontSize: 14,
     letterSpacing: 0.5,
+  },
+  cardSerial: {
+    color: 'rgba(255,255,255,0.5)',
+    fontFamily: FONT.bold,
+    fontSize: 12,
+    letterSpacing: 1,
+    marginTop: 6,
   },
   bottomArea: {
     paddingHorizontal: SPACING.lg,

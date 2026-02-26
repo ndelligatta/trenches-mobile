@@ -15,8 +15,11 @@ export interface PackDef {
 export interface RewardItem {
   name: string;
   type: string;
-  rarity: 'common' | 'rare' | 'epic' | 'legendary' | 'mystic';
+  rarity: 'common' | 'rare' | 'epic' | 'legendary' | 'mythic';
   img: string; // web URL on trenchesgame.com
+  skinTypeId?: string;
+  serialNumber?: number;
+  maxSupply?: number;
 }
 
 export const PACKS: Record<string, PackDef> = {
@@ -54,7 +57,7 @@ export const PACKS: Record<string, PackDef> = {
     itemCount: 7,
     price: 1500,
     emoji: '❓',
-    weights: { common: 25, rare: 25, epic: 25, legendary: 15, mystic: 10 },
+    weights: { common: 25, rare: 25, epic: 25, legendary: 15, mythic: 10 },
   },
 };
 
@@ -77,7 +80,7 @@ export const REWARD_POOL: RewardItem[] = [
   { name: 'Just a Chill Sensei', type: 'Epic Skin', rarity: 'epic', img: 'https://trenchesgame.com/chill-sensei.png' },
   { name: 'Labubu', type: 'Epic Skin', rarity: 'epic', img: 'https://trenchesgame.com/labubu.png' },
   { name: 'Unicorn Fart Dust', type: 'Epic Skin', rarity: 'epic', img: 'https://trenchesgame.com/unicorn-fart-dust.png' },
-  { name: 'a1lon9', type: 'Mystic Skin', rarity: 'mystic', img: 'https://trenchesgame.com/a1lon9.png' },
+  { name: 'a1lon9', type: 'Mystic Skin', rarity: 'mythic', img: 'https://trenchesgame.com/a1lon9.png' },
   { name: 'Percolator', type: 'Epic Skin', rarity: 'epic', img: 'https://trenchesgame.com/percolator.png' },
   { name: 'Punch', type: 'Epic Skin', rarity: 'epic', img: 'https://trenchesgame.com/punch.png' },
 ];
@@ -87,7 +90,7 @@ export const RARITY_COLORS: Record<string, string> = {
   rare: '#3B82F6',
   epic: '#A855F7',
   legendary: '#F59E0B',
-  mystic: '#EC4899',
+  mythic: '#EC4899',
 };
 
 export const RARITY_GLOW: Record<string, string> = {
@@ -95,7 +98,7 @@ export const RARITY_GLOW: Record<string, string> = {
   rare: 'rgba(59,130,246,0.4)',
   epic: 'rgba(168,85,247,0.4)',
   legendary: 'rgba(245,158,11,0.5)',
-  mystic: 'rgba(236,72,153,0.5)',
+  mythic: 'rgba(236,72,153,0.5)',
 };
 
 /** Select a random item based on pack rarity weights */

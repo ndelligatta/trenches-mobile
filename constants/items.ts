@@ -1,5 +1,6 @@
 import { ImageSourcePropType } from 'react-native';
 import { Rarity } from './theme';
+import type { CatalogItem } from '../lib/supabase';
 
 export type ItemType = 'skin' | 'weapon' | 'emote' | 'bundle';
 
@@ -300,9 +301,74 @@ const LABUBU: ShopItem = {
   bgGradient: ['#f06464', '#c83232', '#8b1a1a'],
 };
 
+// ─── Test items for purchase verification ───
+const TEST_PURCHASE: ShopItem = {
+  id: 'test-purchase', name: 'Test Coin', type: 'emote', typeName: 'Test Item', rarity: 'common', price: 50,
+  collection: 'Sigma Collection', color: 'Gold',
+  description: 'A $0.50 test item for verifying the purchase flow.',
+  specs: 'Used for testing only.',
+  image: IMG.gigaChad, category: 'featured',
+  bgGradient: ['#888888', '#555555', '#333333'],
+};
+
+const TEST_TOKEN: ShopItem = {
+  id: 'test-token-25', name: 'Test Token', type: 'emote', typeName: 'Test Item', rarity: 'rare', price: 25,
+  collection: 'Sigma Collection', color: 'Blue',
+  description: 'A $0.25 test item for verifying the purchase flow.',
+  specs: 'Used for testing only.',
+  image: IMG.pepe, category: 'featured',
+  bgGradient: ['#2a4a7f', '#1a2e5a', '#0e1a35'],
+};
+
+const TEST_DIME: ShopItem = {
+  id: 'test-dime-10', name: 'Test Dime', type: 'emote', typeName: 'Test Item', rarity: 'epic', price: 10,
+  collection: 'The Warrior Collective', color: 'Purple',
+  description: 'A $0.10 test item for verifying the purchase flow.',
+  specs: 'Used for testing only.',
+  image: IMG.chillGuy, category: 'featured',
+  bgGradient: ['#4a2a7f', '#2e1a5a', '#1a0e35'],
+};
+
+const TEST_PENNY: ShopItem = {
+  id: 'test-penny-10', name: 'Lucky Penny', type: 'emote', typeName: 'Test Item', rarity: 'legendary', price: 10,
+  collection: 'Doge', color: 'Orange',
+  description: 'A $0.10 test item. Find a penny, pick it up.',
+  specs: 'Used for testing only.',
+  image: IMG.shiba, category: 'featured',
+  bgGradient: ['#7f4a0a', '#5a2e0a', '#351a05'],
+};
+
+const TEST_NICKEL: ShopItem = {
+  id: 'test-nickel-10', name: 'Frosty Nickel', type: 'emote', typeName: 'Test Item', rarity: 'rare', price: 10,
+  collection: 'Pengu', color: 'Blue',
+  description: 'A $0.10 test item. Cool as ice.',
+  specs: 'Used for testing only.',
+  image: IMG.pengu, category: 'featured',
+  bgGradient: ['#1a3a6f', '#0e2550', '#071535'],
+};
+
+const TEST_QUARTER: ShopItem = {
+  id: 'test-quarter-10', name: 'Red Ember', type: 'emote', typeName: 'Test Item', rarity: 'epic', price: 10,
+  collection: 'The Warrior Collective', color: 'Red',
+  description: 'A $0.10 test item. Burning hot.',
+  specs: 'Used for testing only.',
+  image: IMG.chillSensei, category: 'featured',
+  bgGradient: ['#7f1a1a', '#5a0e0e', '#350505'],
+};
+
+const TEST_JADE: ShopItem = {
+  id: 'test-jade-10', name: 'Jade Dragon', type: 'emote', typeName: 'Test Item', rarity: 'legendary', price: 10,
+  collection: 'Pepe', color: 'Green',
+  description: 'A $0.10 test item. Ancient power.',
+  specs: 'Used for testing only.',
+  image: IMG.gaspy, category: 'featured',
+  bgGradient: ['#0a4a1a', '#062e0e', '#031a05'],
+};
+
 // ─── Marketplace: flat list of all 21 canonical items ───
 
 export const MARKETPLACE_ITEMS: ShopItem[] = [
+  TEST_JADE, TEST_QUARTER, TEST_NICKEL, TEST_PENNY, TEST_DIME, TEST_TOKEN, TEST_PURCHASE,
   GIGA_CHAD, GIGA_SWORD, RISE_300, CHAD_COMMANDANT,
   CHILL_GUY, CHILL_SENSEI, CHILL_TANA,
   PEPE, GASPY, CAESAR, LILY_PAD,
@@ -317,7 +383,7 @@ export const SHOP_CATEGORIES: ShopCategory[] = [
   {
     id: 'featured',
     title: 'Featured',
-    items: [GIGA_CHAD, IBIZA_BOSS, PEPE, UNICORN, SHIBA, PENGU, CHILL_GUY, LABUBU],
+    items: [TEST_JADE, TEST_QUARTER, TEST_NICKEL, TEST_PENNY, TEST_DIME, TEST_TOKEN, TEST_PURCHASE, GIGA_CHAD, IBIZA_BOSS, PEPE, UNICORN, SHIBA, PENGU, CHILL_GUY, LABUBU],
   },
   {
     id: 'sigma',
@@ -351,10 +417,50 @@ export const SHOP_CATEGORIES: ShopCategory[] = [
   },
 ];
 
-export function getItemById(id: string): ShopItem | undefined {
-  for (const cat of SHOP_CATEGORIES) {
-    const item = cat.items.find(i => i.id === id);
-    if (item) return item;
+// ─── Catalog adapter: converts DB rows → ShopItem interface ───
+
+export function catalogItemToShopItem(c: CatalogItem): ShopItem {
+  // bg_gradient comes as jsonb — could be array or stringified
+  let gradient: [string, string, string] = ['#333', '#222', '#111'];
+  if (Array.isArray(c.bg_gradient) && c.bg_gradient.length >= 3) {
+    gradient = [c.bg_gradient[0], c.bg_gradient[1], c.bg_gradient[2]];
   }
-  return MARKETPLACE_ITEMS.find(i => i.id === id);
+
+  return {
+    id: c.skin_type_id,
+    name: c.name,
+    type: c.item_type as ItemType,
+    typeName: c.type_name,
+    rarity: c.rarity as Rarity,
+    price: c.price_cents,
+    description: c.description,
+    specs: c.specs,
+    collection: c.collection as Collection,
+    color: c.color as ItemColor,
+    image: { uri: c.image_url },
+    category: c.category,
+    badge: c.badge ?? undefined,
+    bgGradient: gradient,
+    model: c.model_url ?? undefined,
+    cameraOrbit: c.camera_orbit ?? undefined,
+  };
+}
+
+// Module-level fetched catalog (ShopItem[]) — set by shop screen after fetch
+let _fetchedItems: ShopItem[] | null = null;
+
+export function setFetchedCatalog(items: ShopItem[]) {
+  _fetchedItems = items;
+}
+
+export function getFetchedCatalog(): ShopItem[] | null {
+  return _fetchedItems;
+}
+
+export function getItemById(id: string): ShopItem | undefined {
+  // Server catalog is the only source of truth
+  if (_fetchedItems) {
+    return _fetchedItems.find(i => i.id === id);
+  }
+  return undefined;
 }

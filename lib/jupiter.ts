@@ -112,6 +112,7 @@ export async function buildSwapTransaction(
     wrapAndUnwrapSol: true,
     dynamicComputeUnitLimit: true,
     prioritizationFeeLamports: 'auto',
+    maxAccounts: 20,
   });
 
   if (!res.ok) throw new Error(`Jupiter swap build failed (${res.status}): ${res.body}`);

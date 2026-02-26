@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,7 +13,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { WebView } from 'react-native-webview';
 import { useWallet } from '../contexts/WalletContext';
-import { COLORS, FONT, SPACING } from '../constants/theme';
+import { COLORS, FONT, SPACING, RARITY_COLORS } from '../constants/theme';
+import { getPlayerUnits, type PlayerUnit } from '../lib/supabase';
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
@@ -34,6 +35,25 @@ export default function ProfileScreen() {
   const [nameInput, setNameInput] = useState(playerName ?? '');
   const [showQR, setShowQR] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [units, setUnits] = useState<PlayerUnit[]>([]);
+  const [unitsLoading, setUnitsLoading] = useState(false);
+
+  // Fetch numbered units for this player
+  useEffect(() => {
+    if (!address) { setUnits([]); return; }
+    let cancelled = false;
+    (async () => {
+      setUnitsLoading(true);
+      try {
+        const { data, error } = await getPlayerUnits(address);
+        if (!cancelled && data) setUnits(data);
+      } catch {
+        // Fallback — units RPC may not exist yet
+      }
+      if (!cancelled) setUnitsLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, [address]);
 
   const copyAddress = () => {
     if (!address) return;
@@ -210,10 +230,29 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        {/* Inventory Card */}
+        {/* Inventory Card — commented out
         <View style={styles.card}>
           <Text style={styles.cardTitle}>INVENTORY</Text>
-          {ownedItems.length > 0 ? (
+          {units.length > 0 ? (
+            <View style={styles.inventoryGrid}>
+              {units.map((unit) => {
+                const rarityColor = RARITY_COLORS[unit.rarity as keyof typeof RARITY_COLORS] || COLORS.textSecondary;
+                return (
+                  <View key={unit.unit_id} style={[styles.unitCard, { borderColor: rarityColor + '40' }]}>
+                    <Text style={[styles.unitName, { color: rarityColor }]} numberOfLines={1}>
+                      {unit.name}
+                    </Text>
+                    <Text style={styles.unitSerial}>
+                      #{unit.serial_number} of {unit.max_supply}
+                    </Text>
+                    <Text style={[styles.unitRarity, { color: rarityColor }]}>
+                      {unit.rarity}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+          ) : ownedItems.length > 0 ? (
             <View style={styles.inventoryGrid}>
               {ownedItems.map((itemId) => (
                 <View key={itemId} style={styles.inventoryItem}>
@@ -225,9 +264,18 @@ export default function ProfileScreen() {
             <Text style={styles.emptyText}>No items yet. Visit the shop!</Text>
           )}
         </View>
+        */}
 
         {/* Actions */}
-        <TouchableOpacity style={styles.refreshBtn} onPress={refreshPlayer}>
+        <TouchableOpacity style={styles.refreshBtn} onPress={async () => {
+          await refreshPlayer();
+          if (address) {
+            try {
+              const { data } = await getPlayerUnits(address);
+              if (data) setUnits(data);
+            } catch {}
+          }
+        }}>
           <Text style={styles.refreshBtnText}>Refresh Data</Text>
         </TouchableOpacity>
 
@@ -521,6 +569,31 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
     fontFamily: FONT.semibold,
     fontSize: 12,
+  },
+  unitCard: {
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    minWidth: '45%' as any,
+    flex: 1,
+  },
+  unitName: {
+    fontFamily: FONT.bold,
+    fontSize: 13,
+    marginBottom: 2,
+  },
+  unitSerial: {
+    color: COLORS.text,
+    fontFamily: FONT.black,
+    fontSize: 16,
+    marginBottom: 2,
+  },
+  unitRarity: {
+    fontFamily: FONT.semibold,
+    fontSize: 10,
+    letterSpacing: 1,
+    textTransform: 'uppercase' as any,
   },
   emptyText: {
     color: 'rgba(255,255,255,0.25)',
