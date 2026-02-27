@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,9 +9,11 @@ import {
   StyleSheet,
   Dimensions,
   Modal,
+  ActivityIndicator,
 } from 'react-native';
 import { COLORS, FONT, RARITY_COLORS, Rarity } from '../../constants/theme';
-import { MARKETPLACE_ITEMS, COLLECTIONS, ITEM_COLORS, ShopItem, ItemColor, Collection } from '../../constants/items';
+import { COLLECTIONS, ITEM_COLORS, ShopItem, ItemColor, Collection, catalogItemToShopItem } from '../../constants/items';
+import { getShopCatalog } from '../../lib/supabase';
 import { ItemCard } from './ItemCard';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -28,18 +30,16 @@ const CATEGORY_FILTERS = [
 ];
 
 const PRICE_QUICK = [
-  { label: '<1K', min: 0, max: 1000 },
-  { label: '1K-2K', min: 1000, max: 2000 },
-  { label: '2K-3K', min: 2000, max: 3000 },
-  { label: '>3K', min: 3000, max: null },
+  { label: '<$25', min: 0, max: 2500 },
+  { label: '$25-$50', min: 2500, max: 5000 },
+  { label: '$50-$100', min: 5000, max: 10000 },
+  { label: '$100+', min: 10000, max: null },
 ];
 
 const RARITY_OPTIONS: { id: Rarity; label: string }[] = [
-  { id: 'mythic', label: 'Mystic' },
-  { id: 'exclusive', label: 'Exclusive' },
+  { id: 'mythic', label: 'Mythic' },
   { id: 'legendary', label: 'Legendary' },
-  { id: 'epic', label: 'Epic' },
-  { id: 'rare', label: 'Rare' },
+  { id: 'elite', label: 'Elite' },
   { id: 'common', label: 'Common' },
 ];
 
@@ -54,10 +54,30 @@ const SORT_OPTIONS: { id: SortOption; label: string }[] = [
 ];
 
 const RARITY_RANK: Record<string, number> = {
-  common: 1, rare: 2, epic: 3, legendary: 4, exclusive: 5, mythic: 6,
+  common: 1, elite: 2, legendary: 3, mythic: 4,
 };
 
 export function MarketplaceView() {
+  // Catalog data from Supabase
+  const [allItems, setAllItems] = useState<ShopItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const catalog = await getShopCatalog();
+        const items = catalog
+          .filter(c => c.category !== 'packs')
+          .map(catalogItemToShopItem);
+        setAllItems(items);
+        console.log(`[MARKET] Loaded ${items.length} items from Supabase`);
+      } catch (err: any) {
+        console.error('[MARKET] Catalog fetch failed:', err?.message);
+      }
+      setLoading(false);
+    })();
+  }, []);
+
   // Filter state
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('all');
@@ -112,7 +132,7 @@ export function MarketplaceView() {
 
   // Filter + sort
   const displayItems = useMemo(() => {
-    let items = MARKETPLACE_ITEMS;
+    let items = allItems;
 
     // Search
     if (search.trim()) {
@@ -180,7 +200,7 @@ export function MarketplaceView() {
     }
 
     return sorted;
-  }, [search, category, priceQuick, selectedRarities, selectedCollections, selectedColors, sortBy]);
+  }, [allItems, search, category, priceQuick, selectedRarities, selectedCollections, selectedColors, sortBy]);
 
   const renderItem = useCallback(
     ({ item }: { item: ShopItem }) => <ItemCard item={item} cardWidth={CARD_WIDTH} />,
@@ -234,6 +254,15 @@ export function MarketplaceView() {
       </View>
     </>
   );
+
+  if (loading) {
+    return (
+      <View style={styles.emptyState}>
+        <ActivityIndicator color={COLORS.primary} size="large" />
+        <Text style={styles.emptyText}>Loading marketplace...</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>

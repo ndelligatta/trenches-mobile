@@ -37,9 +37,8 @@ export default function PackOpeningScreen() {
   const { pack: packId } = useLocalSearchParams<{ pack: string }>();
   const { connected, connectMWA, purchasePack } = useWallet();
 
-  const pack = PACKS[packId ?? 'starter-pack'] ?? PACKS['starter-pack'];
-  // All packs $0.10 for testing (v1)
-  const packPriceUsdc = 0.10;
+  const pack = PACKS[packId ?? 'common-pack'] ?? PACKS['common-pack'];
+  const packPriceUsdc = pack.price_usd;
 
   const [stage, setStage] = useState<Stage>('ready');
   const [reward, setReward] = useState<RewardItem | null>(null);
@@ -270,7 +269,7 @@ window.addEventListener('message', handleMsg);
 
     setPurchasing(true);
     try {
-      const result = await purchasePack(packId ?? 'starter-pack', packPriceUsdc);
+      const result = await purchasePack(packId ?? 'common-pack', packPriceUsdc);
       if (!result) {
         // User cancelled or error — stay on ready stage
         setPurchasing(false);

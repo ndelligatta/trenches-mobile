@@ -10,12 +10,10 @@ const GRID_GAP = 10;
 const CARD_WIDTH = Math.floor((SCREEN_WIDTH - GRID_PADDING * 2 - GRID_GAP) / 2);
 
 const PACK_LIST = [
-  { name: 'STARTER PACK', price: '500', emoji: '\u{1F4E6}', rarity: 'Common+', color: COLORS.common, packId: 'starter-pack' },
-  { name: 'WARRIOR PACK', price: '1,000', emoji: '\u2694\uFE0F', rarity: 'Rare+', color: COLORS.rare, packId: 'warrior-pack' },
-  { name: 'ELITE PACK', price: '1,500', emoji: '\u{1F52E}', rarity: 'Epic+', color: COLORS.epic, packId: 'legendary-pack' },
-  { name: 'LEGENDARY CRATE', price: '2,500', emoji: '\u{1F3B4}', rarity: 'Legendary+', color: COLORS.legendary, packId: 'legendary-pack' },
-  { name: 'MYTHIC CHEST', price: '5,000', emoji: '\u{1F451}', rarity: 'Mythic chance', color: COLORS.mythic, packId: 'mystery-pack' },
-  { name: 'MYSTERY BOX', price: '???', emoji: '\u2753', rarity: '???', color: COLORS.exclusive, packId: 'mystery-pack' },
+  { name: 'COMMON PACK', price: '$10', emoji: '\u{1F4E6}', rarity: 'Common+', color: COLORS.common, packId: 'common-pack' },
+  { name: 'ELITE PACK', price: '$50', emoji: '\u2694\uFE0F', rarity: 'Elite+', color: COLORS.elite, packId: 'elite-pack' },
+  { name: 'LEGENDARY PACK', price: '$100', emoji: '\u{1F3B4}', rarity: 'Legendary+', color: COLORS.legendary, packId: 'legendary-pack' },
+  { name: 'MYTHIC PACK', price: '$250', emoji: '\u{1F451}', rarity: 'Mythic chance', color: COLORS.mythic, packId: 'mythic-pack' },
 ];
 
 export function PacksTab() {
@@ -37,15 +35,15 @@ export function PacksTab() {
         <View style={styles.featuredBadge}>
           <Text style={styles.featuredBadgeText}>FEATURED</Text>
         </View>
-        <Text style={styles.featuredEmoji}>{'\u{1F3B4}'}</Text>
-        <Text style={styles.featuredTitle}>LEGENDARY CRATE</Text>
+        <Text style={styles.featuredEmoji}>{'\u{1F451}'}</Text>
+        <Text style={styles.featuredTitle}>MYTHIC PACK</Text>
         <Text style={styles.featuredDesc}>
-          Guaranteed Rare+ drop. Chance at Legendary & Mythic items.
+          20% Mythic chance. Best odds for the rarest items.
         </Text>
         <View style={styles.priceRow}>
-          <Text style={styles.price}>2,500 $TRENCH</Text>
+          <Text style={styles.price}>$250 USDC</Text>
         </View>
-        <TouchableOpacity style={styles.buyBtn} onPress={() => router.push('/pack-opening?pack=legendary-pack')}>
+        <TouchableOpacity style={styles.buyBtn} onPress={() => router.push('/pack-opening?pack=mythic-pack')}>
           <Text style={styles.buyBtnText}>OPEN PACK</Text>
         </TouchableOpacity>
       </View>
@@ -63,16 +61,11 @@ export function PacksTab() {
             <Text style={styles.cardEmoji}>{p.emoji}</Text>
             <Text style={styles.cardName}>{p.name}</Text>
             <Text style={[styles.cardRarity, { color: p.color }]}>{p.rarity}</Text>
-            <Text style={styles.cardPrice}>{p.price} $T</Text>
+            <Text style={styles.cardPrice}>{p.price} USDC</Text>
           </TouchableOpacity>
         ))}
       </View>
 
-      <View style={styles.disclaimer}>
-        <Text style={styles.disclaimerText}>
-          Pack contents are randomized. Drop rates visible before purchase. All items are cosmetic.
-        </Text>
-      </View>
     </ScrollView>
   );
 }

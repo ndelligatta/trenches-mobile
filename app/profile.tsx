@@ -208,26 +208,7 @@ export default function ProfileScreen() {
         {/* Game Stats Card */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>GAME STATS</Text>
-          <View style={styles.statsGrid}>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{player?.games_played ?? 0}</Text>
-              <Text style={styles.statLabel}>Games</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{player?.wins ?? 0}</Text>
-              <Text style={styles.statLabel}>Wins</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{player?.kills ?? 0}</Text>
-              <Text style={styles.statLabel}>Kills</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Text style={[styles.statValue, { color: COLORS.primary }]}>
-                {player?.currency?.toLocaleString() ?? 0}
-              </Text>
-              <Text style={styles.statLabel}>Currency</Text>
-            </View>
-          </View>
+          <Text style={{ color: 'rgba(255,255,255,0.35)', fontFamily: FONT.regular, fontSize: 14, textAlign: 'center', paddingVertical: 20 }}>Coming Soon</Text>
         </View>
 
         {/* Inventory Card — commented out
@@ -279,12 +260,12 @@ export default function ProfileScreen() {
           <Text style={styles.refreshBtnText}>Refresh Data</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity
+        {/* <TouchableOpacity
           style={[styles.refreshBtn, { backgroundColor: 'rgba(245,197,24,0.1)', borderColor: 'rgba(245,197,24,0.2)' }]}
           onPress={() => router.push('/test-swap')}
         >
           <Text style={[styles.refreshBtnText, { color: COLORS.primary }]}>Test Swap (Dev)</Text>
-        </TouchableOpacity>
+        </TouchableOpacity> */}
 
         <TouchableOpacity style={styles.disconnectBtn} onPress={handleDisconnect}>
           <Text style={styles.disconnectBtnText}>Disconnect Wallet</Text>

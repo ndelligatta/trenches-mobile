@@ -111,7 +111,7 @@ const RISE_300: ShopItem = {
 };
 
 const CHAD_COMMANDANT: ShopItem = {
-  id: 'chad-commandant', name: 'Chad Commandant', type: 'skin', typeName: 'Epic Skin', rarity: 'epic', price: 2000,
+  id: 'chad-commandant', name: 'Chad Commandant', type: 'skin', typeName: 'Elite Skin', rarity: 'elite', price: 2000,
   collection: 'Sigma Collection', color: 'Gold',
   description: 'Command your troops with authority. Lead from the front.',
   specs: '3D model with commander stance.',
@@ -120,7 +120,7 @@ const CHAD_COMMANDANT: ShopItem = {
 };
 
 const CHILL_GUY: ShopItem = {
-  id: 'chill-guy', name: 'Chill Guy', type: 'skin', typeName: 'Rare Skin', rarity: 'rare', price: 1200,
+  id: 'chill-guy', name: 'Chill Guy', type: 'skin', typeName: 'Common Skin', rarity: 'common', price: 1200,
   collection: 'The Warrior Collective', color: 'Gold',
   description: 'Stay relaxed even in the heat of battle. Cool under pressure.',
   specs: 'Calm demeanor with smooth animations.',
@@ -129,7 +129,7 @@ const CHILL_GUY: ShopItem = {
 };
 
 const CHILL_SENSEI: ShopItem = {
-  id: 'chill-sensei', name: 'Just a Chill Sensei', type: 'skin', typeName: 'Epic Skin', rarity: 'epic', price: 1800,
+  id: 'chill-sensei', name: 'Just a Chill Sensei', type: 'skin', typeName: 'Elite Skin', rarity: 'elite', price: 1800,
   collection: 'The Warrior Collective', color: 'Red',
   description: 'Master of the chill arts. Teaches tranquility through combat.',
   specs: '3D model with sensei robes and effects.',
@@ -138,7 +138,7 @@ const CHILL_SENSEI: ShopItem = {
 };
 
 const CHILL_TANA: ShopItem = {
-  id: 'chill-tana', name: 'Chill-tana', type: 'weapon', typeName: 'Epic Weapon', rarity: 'epic', price: 1500,
+  id: 'chill-tana', name: 'Chill-tana', type: 'weapon', typeName: 'Elite Weapon', rarity: 'elite', price: 1500,
   collection: 'The Warrior Collective', color: 'Pink',
   description: 'A beautifully crafted katana with cherry blossom details.',
   specs: '3D model with cherry blossom particle effects.',
@@ -147,7 +147,7 @@ const CHILL_TANA: ShopItem = {
 };
 
 const PEPE: ShopItem = {
-  id: 'pepe', name: 'Pepe', type: 'skin', typeName: 'Epic Skin', rarity: 'epic', price: 1500,
+  id: 'pepe', name: 'Pepe', type: 'skin', typeName: 'Elite Skin', rarity: 'elite', price: 1500,
   collection: 'Pepe', color: 'Green',
   description: 'The legendary meme frog. Feels good man.',
   specs: 'Classic Pepe with signature expressions.',
@@ -156,7 +156,7 @@ const PEPE: ShopItem = {
 };
 
 const GASPY: ShopItem = {
-  id: 'gaspy', name: 'Gaspy', type: 'skin', typeName: 'Epic Skin', rarity: 'epic', price: 1800,
+  id: 'gaspy', name: 'Gaspy', type: 'skin', typeName: 'Mythic Skin', rarity: 'mythic', price: 15000,
   collection: 'Pepe', color: 'Green',
   description: 'A sophisticated frog of distinguished taste and refinement.',
   specs: '3D model with monocle and top hat details.',
@@ -174,7 +174,7 @@ const CAESAR: ShopItem = {
 };
 
 const LILY_PAD: ShopItem = {
-  id: 'lily-pad-staff', name: 'Lily Pad Staff', type: 'weapon', typeName: 'Epic Weapon', rarity: 'epic', price: 1600,
+  id: 'lily-pad-staff', name: 'Lily Pad Staff', type: 'weapon', typeName: 'Elite Weapon', rarity: 'elite', price: 1600,
   collection: 'Pepe', color: 'Green',
   description: 'A mystical staff infused with the power of nature. Channel the swamp.',
   specs: '3D model with nature particle effects.',
@@ -183,7 +183,7 @@ const LILY_PAD: ShopItem = {
 };
 
 const SHIBA: ShopItem = {
-  id: 'shiba-inu', name: 'Shiba Inu', type: 'skin', typeName: 'Epic Skin', rarity: 'epic', price: 1500,
+  id: 'shiba-inu', name: 'Shiba Inu', type: 'skin', typeName: 'Elite Skin', rarity: 'elite', price: 1500,
   collection: 'Doge', color: 'Gold',
   description: 'The original doge. Much wow, very meme.',
   specs: 'Classic shibe with wholesome energy.',
@@ -192,7 +192,7 @@ const SHIBA: ShopItem = {
 };
 
 const DOGWIFHAT: ShopItem = {
-  id: 'dogwifhat', name: 'Dogwifhat', type: 'skin', typeName: 'Epic Skin', rarity: 'epic', price: 1800,
+  id: 'dogwifhat', name: 'Dogwifhat', type: 'skin', typeName: 'Elite Skin', rarity: 'elite', price: 1800,
   collection: 'Doge', color: 'Gold',
   description: 'Just a buff doge with a pink beanie. Simple as.',
   specs: '3D model with signature pink beanie.',
@@ -201,7 +201,7 @@ const DOGWIFHAT: ShopItem = {
 };
 
 const THUG_LYFE: ShopItem = {
-  id: 'thug-lyfe', name: 'Thug Lyfe', type: 'skin', typeName: 'Epic Skin', rarity: 'epic', price: 1800,
+  id: 'thug-lyfe', name: 'Thug Lyfe', type: 'skin', typeName: 'Elite Skin', rarity: 'elite', price: 1800,
   collection: 'Doge', color: 'Gold',
   description: 'Deal with it. Maximum swag achieved.',
   specs: '3D model with pixel sunglasses effect.',
@@ -219,7 +219,7 @@ const MOON_BOUND: ShopItem = {
 };
 
 const PENGU: ShopItem = {
-  id: 'pengu', name: 'Pengu', type: 'skin', typeName: 'Rare Skin', rarity: 'rare', price: 1200,
+  id: 'pengu', name: 'Pengu', type: 'skin', typeName: 'Common Skin', rarity: 'common', price: 1200,
   collection: 'Pengu', color: 'Blue',
   description: 'The adorable penguin that captured the hearts of millions.',
   specs: 'Cute waddle animation included.',
@@ -228,7 +228,7 @@ const PENGU: ShopItem = {
 };
 
 const SWORD_FISH: ShopItem = {
-  id: 'sword-fish', name: 'Sword Fish', type: 'weapon', typeName: 'Epic Weapon', rarity: 'epic', price: 1500,
+  id: 'sword-fish', name: 'Sword Fish', type: 'weapon', typeName: 'Elite Weapon', rarity: 'elite', price: 1500,
   collection: 'Pengu', color: 'Blue',
   description: 'A legendary blade forged from the depths of the ocean.',
   specs: '3D model with ocean shimmer effects.',
@@ -237,7 +237,7 @@ const SWORD_FISH: ShopItem = {
 };
 
 const NIETZSCHE: ShopItem = {
-  id: 'nietzsche-penguin', name: 'Nietzsche Penguin', type: 'skin', typeName: 'Epic Skin', rarity: 'epic', price: 1800,
+  id: 'nietzsche-penguin', name: 'Nietzsche Penguin', type: 'skin', typeName: 'Elite Skin', rarity: 'elite', price: 1800,
   collection: 'Pengu', color: 'Blue',
   description: 'When you gaze into the abyss, the abyss waves back.',
   specs: '3D model with philosophical gravitas.',
@@ -255,7 +255,7 @@ const PUMP_PILL: ShopItem = {
 };
 
 const PUMP_FOUNDER: ShopItem = {
-  id: 'pump-pill-founder', name: 'Pump Pill Founder Edition', type: 'skin', typeName: 'Exclusive Skin', rarity: 'exclusive', price: 5000,
+  id: 'pump-pill-founder', name: 'Pump Pill Founder Edition', type: 'skin', typeName: 'Mythic Skin', rarity: 'mythic', price: 5000,
   collection: 'The Pump Collective', color: 'Gold',
   description: 'Exclusive founder edition. Only for pump.fun employees.',
   specs: '3D model with exclusive gold trim and founder badge.',
@@ -284,7 +284,7 @@ const IBIZA_BOSS: ShopItem = {
 };
 
 const UNICORN: ShopItem = {
-  id: 'unicorn-feat', name: 'Unicorn Fart Dust', type: 'skin', typeName: 'Epic Skin', rarity: 'epic', price: 1800,
+  id: 'unicorn-feat', name: 'Unicorn Fart Dust', type: 'skin', typeName: 'Elite Skin', rarity: 'elite', price: 1800,
   collection: 'The Warrior Collective', color: 'Pink',
   description: 'Magical and deadly. Rainbows follow in your wake.',
   specs: 'Rainbow particle trail on movement.',
@@ -293,129 +293,13 @@ const UNICORN: ShopItem = {
 };
 
 const LABUBU: ShopItem = {
-  id: 'labubu-feat', name: 'Labubu', type: 'skin', typeName: 'Epic Skin', rarity: 'epic', price: 1500,
+  id: 'labubu-feat', name: 'Labubu', type: 'skin', typeName: 'Elite Skin', rarity: 'elite', price: 1500,
   collection: 'The Warrior Collective', color: 'Red',
   description: 'The mischievous one. Chaos is a ladder.',
   specs: 'Mischievous idle animations.',
   image: IMG.labubu, category: 'featured',
   bgGradient: ['#f06464', '#c83232', '#8b1a1a'],
 };
-
-// ─── Test items for purchase verification ───
-const TEST_PURCHASE: ShopItem = {
-  id: 'test-purchase', name: 'Test Coin', type: 'emote', typeName: 'Test Item', rarity: 'common', price: 50,
-  collection: 'Sigma Collection', color: 'Gold',
-  description: 'A $0.50 test item for verifying the purchase flow.',
-  specs: 'Used for testing only.',
-  image: IMG.gigaChad, category: 'featured',
-  bgGradient: ['#888888', '#555555', '#333333'],
-};
-
-const TEST_TOKEN: ShopItem = {
-  id: 'test-token-25', name: 'Test Token', type: 'emote', typeName: 'Test Item', rarity: 'rare', price: 25,
-  collection: 'Sigma Collection', color: 'Blue',
-  description: 'A $0.25 test item for verifying the purchase flow.',
-  specs: 'Used for testing only.',
-  image: IMG.pepe, category: 'featured',
-  bgGradient: ['#2a4a7f', '#1a2e5a', '#0e1a35'],
-};
-
-const TEST_DIME: ShopItem = {
-  id: 'test-dime-10', name: 'Test Dime', type: 'emote', typeName: 'Test Item', rarity: 'epic', price: 10,
-  collection: 'The Warrior Collective', color: 'Purple',
-  description: 'A $0.10 test item for verifying the purchase flow.',
-  specs: 'Used for testing only.',
-  image: IMG.chillGuy, category: 'featured',
-  bgGradient: ['#4a2a7f', '#2e1a5a', '#1a0e35'],
-};
-
-const TEST_PENNY: ShopItem = {
-  id: 'test-penny-10', name: 'Lucky Penny', type: 'emote', typeName: 'Test Item', rarity: 'legendary', price: 10,
-  collection: 'Doge', color: 'Orange',
-  description: 'A $0.10 test item. Find a penny, pick it up.',
-  specs: 'Used for testing only.',
-  image: IMG.shiba, category: 'featured',
-  bgGradient: ['#7f4a0a', '#5a2e0a', '#351a05'],
-};
-
-const TEST_NICKEL: ShopItem = {
-  id: 'test-nickel-10', name: 'Frosty Nickel', type: 'emote', typeName: 'Test Item', rarity: 'rare', price: 10,
-  collection: 'Pengu', color: 'Blue',
-  description: 'A $0.10 test item. Cool as ice.',
-  specs: 'Used for testing only.',
-  image: IMG.pengu, category: 'featured',
-  bgGradient: ['#1a3a6f', '#0e2550', '#071535'],
-};
-
-const TEST_QUARTER: ShopItem = {
-  id: 'test-quarter-10', name: 'Red Ember', type: 'emote', typeName: 'Test Item', rarity: 'epic', price: 10,
-  collection: 'The Warrior Collective', color: 'Red',
-  description: 'A $0.10 test item. Burning hot.',
-  specs: 'Used for testing only.',
-  image: IMG.chillSensei, category: 'featured',
-  bgGradient: ['#7f1a1a', '#5a0e0e', '#350505'],
-};
-
-const TEST_JADE: ShopItem = {
-  id: 'test-jade-10', name: 'Jade Dragon', type: 'emote', typeName: 'Test Item', rarity: 'legendary', price: 10,
-  collection: 'Pepe', color: 'Green',
-  description: 'A $0.10 test item. Ancient power.',
-  specs: 'Used for testing only.',
-  image: IMG.gaspy, category: 'featured',
-  bgGradient: ['#0a4a1a', '#062e0e', '#031a05'],
-};
-
-// ─── Marketplace: flat list of all 21 canonical items ───
-
-export const MARKETPLACE_ITEMS: ShopItem[] = [
-  TEST_JADE, TEST_QUARTER, TEST_NICKEL, TEST_PENNY, TEST_DIME, TEST_TOKEN, TEST_PURCHASE,
-  GIGA_CHAD, GIGA_SWORD, RISE_300, CHAD_COMMANDANT,
-  CHILL_GUY, CHILL_SENSEI, CHILL_TANA,
-  PEPE, GASPY, CAESAR, LILY_PAD,
-  SHIBA, DOGWIFHAT, THUG_LYFE, MOON_BOUND,
-  PENGU, SWORD_FISH, NIETZSCHE,
-  PUMP_PILL, PUMP_FOUNDER, A1LON9,
-];
-
-// ─── Shop categories (for the Shop tab) ───
-
-export const SHOP_CATEGORIES: ShopCategory[] = [
-  {
-    id: 'featured',
-    title: 'Featured',
-    items: [TEST_JADE, TEST_QUARTER, TEST_NICKEL, TEST_PENNY, TEST_DIME, TEST_TOKEN, TEST_PURCHASE, GIGA_CHAD, IBIZA_BOSS, PEPE, UNICORN, SHIBA, PENGU, CHILL_GUY, LABUBU],
-  },
-  {
-    id: 'sigma',
-    title: 'Sigma Collection',
-    items: [GIGA_CHAD, GIGA_SWORD, RISE_300, CHAD_COMMANDANT],
-  },
-  {
-    id: 'warrior',
-    title: 'The Warrior Collective',
-    items: [CHILL_GUY, CHILL_SENSEI, CHILL_TANA],
-  },
-  {
-    id: 'pepe',
-    title: 'Pepe',
-    items: [PEPE, GASPY, CAESAR, LILY_PAD],
-  },
-  {
-    id: 'doge',
-    title: 'Doge',
-    items: [SHIBA, DOGWIFHAT, THUG_LYFE, MOON_BOUND],
-  },
-  {
-    id: 'pengu',
-    title: 'Pengu',
-    items: [PENGU, SWORD_FISH, NIETZSCHE],
-  },
-  {
-    id: 'pump',
-    title: 'The Pump Collective',
-    items: [PUMP_PILL, PUMP_FOUNDER, A1LON9],
-  },
-];
 
 // ─── Catalog adapter: converts DB rows → ShopItem interface ───
 

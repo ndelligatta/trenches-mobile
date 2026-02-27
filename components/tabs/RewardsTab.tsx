@@ -8,9 +8,9 @@ export function RewardsTab() {
       <View style={styles.icon}>
         <Text style={styles.iconText}>XP</Text>
       </View>
-      <Text style={styles.title}>Rewards</Text>
+      <Text style={styles.title}>Coming Soon</Text>
       <Text style={styles.subtitle}>
-        Earn $TRENCH by winning matches and completing challenges
+        Rewards are on the way. Stay tuned.
       </Text>
     </View>
   );

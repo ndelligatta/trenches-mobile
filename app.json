@@ -15,14 +15,14 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.trenches.mobile"
+      "bundleIdentifier": "com.trenchesgame"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0a0a14"
       },
-      "package": "com.trenches.mobile"
+      "package": "com.trenchesgame"
     },
     "web": {
       "favicon": "./assets/favicon.png"

@@ -135,7 +135,7 @@ export default function ItemDetailScreen() {
       {/* Top bar */}
       <View style={styles.topBar}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Text style={styles.backArrow}>←</Text>
+          <Text style={styles.backArrow}>&#x276E;</Text>
         </TouchableOpacity>
         <Text style={styles.topTitle}>ITEM DETAILS</Text>
         <View style={{ width: 40 }} />
