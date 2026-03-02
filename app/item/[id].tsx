@@ -196,11 +196,8 @@ export default function ItemDetailScreen() {
             </View>
             {/* Price inline with name */}
             <View style={styles.priceBox}>
-              <View style={styles.trenchIcon}>
-                <Text style={styles.trenchT}>V</Text>
-              </View>
               <Text style={styles.priceText}>
-                {item.price === -1 ? '∞' : item.price.toLocaleString()}
+                {item.price === -1 ? '∞' : `$${(item.price / 100) >= 1 ? Math.round(item.price / 100).toLocaleString() : (item.price / 100).toFixed(2)}`}
               </Text>
             </View>
           </View>
@@ -284,7 +281,7 @@ export default function ItemDetailScreen() {
               <ActivityIndicator color="#000" />
             ) : (
               <Text style={styles.purchaseText}>
-                {connected ? 'PURCHASE' : 'LOGIN TO BUY'}
+                {connected ? `PURCHASE — $${(item.price / 100).toFixed(2)}` : 'LOGIN TO BUY'}
               </Text>
             )}
           </TouchableOpacity>

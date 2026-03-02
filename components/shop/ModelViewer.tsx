@@ -81,7 +81,7 @@ setTimeout(function(){
       <WebView
         source={{ html, baseUrl: MODEL_BASE_URL }}
         style={styles.webview}
-        originWhitelist={['*']}
+        originWhitelist={['https://*']}
         javaScriptEnabled
         domStorageEnabled
         allowsInlineMediaPlayback
@@ -89,9 +89,9 @@ setTimeout(function(){
         scrollEnabled={false}
         bounces={false}
         overScrollMode="never"
-        mixedContentMode="always"
-        allowFileAccess
-        allowUniversalAccessFromFileURLs
+        mixedContentMode="never"
+        allowFileAccess={false}
+        allowUniversalAccessFromFileURLs={false}
         androidLayerType="hardware"
         onMessage={(event) => {
           const msg = event.nativeEvent.data;

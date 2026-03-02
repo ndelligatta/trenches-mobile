@@ -22,6 +22,7 @@ import {
   type RewardItem,
 } from '../constants/packs';
 import { useWallet } from '../contexts/WalletContext';
+import { logger } from '../lib/logger';
 
 // Same base URL used by the working ModelViewer component
 const MODEL_BASE_URL = 'https://trenchesgame.com';
@@ -191,7 +192,7 @@ window.addEventListener('message', handleMsg);
       const msg = JSON.parse(event.nativeEvent.data);
       if (msg.type === 'loaded') setChestLoaded(true);
       if (msg.type === 'animDone') runRevealSequence();
-      if (msg.type === 'error') console.warn('Chest model error:', msg.detail);
+      if (msg.type === 'error') logger.warn('Chest model error:', msg.detail);
     } catch {}
   }, []);
 
@@ -292,7 +293,7 @@ window.addEventListener('message', handleMsg);
       // Tell the 3D chest to play its open animation
       webviewRef.current?.postMessage(JSON.stringify({ action: 'playOpen' }));
     } catch (err: any) {
-      console.error('[PACK-OPENING] Error:', err?.message);
+      logger.error('[PACK-OPENING] Error:', err?.message);
     }
     setPurchasing(false);
   }, [stage, purchasing, connected, connectMWA, purchasePack, packId, packPriceUsdc]);
@@ -384,7 +385,7 @@ window.addEventListener('message', handleMsg);
                 ref={webviewRef}
                 source={{ html: chestHtml, baseUrl: MODEL_BASE_URL }}
                 style={styles.webview}
-                originWhitelist={['*']}
+                originWhitelist={['https://*']}
                 javaScriptEnabled
                 domStorageEnabled
                 allowsInlineMediaPlayback
@@ -392,12 +393,12 @@ window.addEventListener('message', handleMsg);
                 scrollEnabled={false}
                 bounces={false}
                 overScrollMode="never"
-                mixedContentMode="always"
-                allowFileAccess
-                allowUniversalAccessFromFileURLs
+                mixedContentMode="never"
+                allowFileAccess={false}
+                allowUniversalAccessFromFileURLs={false}
                 androidLayerType="hardware"
                 onMessage={onMessage}
-                onError={() => console.warn('Chest WebView error')}
+                onError={() => logger.warn('Chest WebView error')}
               />
             </View>
           </Animated.View>

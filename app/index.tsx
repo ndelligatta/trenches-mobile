@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
 } from 'react-native';
+import { toggleDemoMode } from '../lib/demo';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, FONT } from '../constants/theme';
@@ -37,6 +38,20 @@ export default function ShopScreen() {
   const insets = useSafeAreaInsets();
   const [activeTab, setActiveTab] = useState<string>('shop');
 
+  // Hidden 7-tap demo mode activation on title
+  const tapCountRef = useRef(0);
+  const tapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleTitleTap = useCallback(() => {
+    tapCountRef.current += 1;
+    if (tapTimerRef.current) clearTimeout(tapTimerRef.current);
+    if (tapCountRef.current >= 7) {
+      tapCountRef.current = 0;
+      toggleDemoMode();
+      return;
+    }
+    tapTimerRef.current = setTimeout(() => { tapCountRef.current = 0; }, 2000);
+  }, []);
+
   return (
     <View style={styles.container}>
       <LinearGradient
@@ -47,10 +62,10 @@ export default function ShopScreen() {
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 6 }]}>
         <View style={styles.headerLeft}>
-          <View>
+          <TouchableOpacity onPress={handleTitleTap} activeOpacity={1}>
             <Text style={styles.title}>TRENCHES</Text>
             <Text style={styles.subtitle}>{TAB_SUBTITLES[activeTab] || 'ITEM SHOP'}</Text>
-          </View>
+          </TouchableOpacity>
         </View>
         <WalletButton />
       </View>

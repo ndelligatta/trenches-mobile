@@ -26,7 +26,7 @@ export const JUPITER_QUOTE_URL = 'https://api.jup.ag/swap/v1/quote';
 export const JUPITER_SWAP_URL = 'https://api.jup.ag/swap/v1/swap';
 
 // Free API key from https://portal.jup.ag
-export const JUPITER_API_KEY = '946d1e83-5051-4cf8-8975-c0227706578f';
+export const JUPITER_API_KEY = process.env.EXPO_PUBLIC_JUPITER_API_KEY ?? '';
 
 // Slippage tolerance in basis points (3% = 300 bps)
 export const DEFAULT_SLIPPAGE_BPS = 300;

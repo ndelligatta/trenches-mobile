@@ -12,6 +12,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { WebView } from 'react-native-webview';
+import { Linking } from 'react-native';
 import { useWallet } from '../contexts/WalletContext';
 import { COLORS, FONT, SPACING, RARITY_COLORS } from '../constants/theme';
 import { getPlayerUnits, type PlayerUnit } from '../lib/supabase';
@@ -266,6 +267,16 @@ export default function ProfileScreen() {
         >
           <Text style={[styles.refreshBtnText, { color: COLORS.primary }]}>Test Swap (Dev)</Text>
         </TouchableOpacity> */}
+
+        {/* Legal */}
+        <View style={styles.legalRow}>
+          <TouchableOpacity style={styles.legalBtn} onPress={() => router.push('/privacy')}>
+            <Text style={styles.legalBtnText}>Privacy Policy</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.legalBtn} onPress={() => router.push('/terms')}>
+            <Text style={styles.legalBtnText}>Terms of Service</Text>
+          </TouchableOpacity>
+        </View>
 
         <TouchableOpacity style={styles.disconnectBtn} onPress={handleDisconnect}>
           <Text style={styles.disconnectBtnText}>Disconnect Wallet</Text>
@@ -595,6 +606,25 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     fontFamily: FONT.semibold,
     fontSize: 14,
+  },
+  legalRow: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+    marginBottom: SPACING.sm,
+  },
+  legalBtn: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+  },
+  legalBtnText: {
+    color: COLORS.textSecondary,
+    fontFamily: FONT.medium,
+    fontSize: 13,
   },
   disconnectBtn: {
     alignItems: 'center',

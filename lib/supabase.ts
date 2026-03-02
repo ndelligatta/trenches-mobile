@@ -1,9 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { logger } from './logger';
 
-export const SUPABASE_URL = 'https://ouhzztijvgrvjpdvgido.supabase.co';
-export const SUPABASE_ANON_KEY =
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im91aHp6dGlqdmdydmpwZHZnaWRvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAxNjQzNzUsImV4cCI6MjA3NTc0MDM3NX0.60JLI7OIAZRiqNg0SOHPPORMkCcspHvFD7LwETRwUDE';
+export const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
+export const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
@@ -107,8 +107,8 @@ export function verifyPurchase(
     skin_type_id: skinTypeId,
     expected_amount_usdc: priceUsdc,
   };
-  console.log(`[verifyPurchase] XHR POST ${url}`);
-  console.log(`[verifyPurchase] body: ${JSON.stringify(body)}`);
+  logger.log(`[verifyPurchase] XHR POST ${url}`);
+  logger.log(`[verifyPurchase] body: ${JSON.stringify(body)}`);
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open('POST', url);
@@ -116,26 +116,26 @@ export function verifyPurchase(
     xhr.setRequestHeader('Authorization', `Bearer ${SUPABASE_ANON_KEY}`);
     xhr.timeout = 30000;
     xhr.onreadystatechange = () => {
-      console.log(`[verifyPurchase] readyState=${xhr.readyState}, status=${xhr.status}`);
+      logger.log(`[verifyPurchase] readyState=${xhr.readyState}, status=${xhr.status}`);
       if (xhr.readyState === 4) {
         if (xhr.status > 0) {
-          console.log(`[verifyPurchase] response status=${xhr.status}, body=${xhr.responseText.slice(0, 500)}`);
+          logger.log(`[verifyPurchase] response status=${xhr.status}, body=${xhr.responseText.slice(0, 500)}`);
           try {
             resolve(JSON.parse(xhr.responseText));
           } catch {
             reject(new Error(`Invalid JSON response: ${xhr.responseText.slice(0, 200)}`));
           }
         } else {
-          console.error(`[verifyPurchase] readyState=4 but status=0 — network error`);
+          logger.error(`[verifyPurchase] readyState=4 but status=0 — network error`);
         }
       }
     };
     xhr.onerror = () => {
-      console.error(`[verifyPurchase] XHR onerror fired`);
+      logger.error(`[verifyPurchase] XHR onerror fired`);
       reject(new Error(`Network error calling verify-purchase`));
     };
     xhr.ontimeout = () => {
-      console.error(`[verifyPurchase] XHR timeout after 30s`);
+      logger.error(`[verifyPurchase] XHR timeout after 30s`);
       reject(new Error(`Timeout calling verify-purchase`));
     };
     xhr.send(JSON.stringify(body));
@@ -214,13 +214,13 @@ export async function getShopCatalog(forceRefresh = false): Promise<CatalogItem[
   _catalogFetching = (async () => {
     const { data, error } = await supabase.rpc('get_shop_catalog');
     if (error) {
-      console.error('[catalog] get_shop_catalog error:', error.message);
+      logger.error('[catalog] get_shop_catalog error:', error.message);
       throw error;
     }
     const items = (data ?? []) as CatalogItem[];
     _catalogCache = items;
     _catalogFetching = null;
-    console.log(`[catalog] Fetched ${items.length} items from Supabase`);
+    logger.log(`[catalog] Fetched ${items.length} items from Supabase`);
     return items;
   })();
 
@@ -259,8 +259,8 @@ export function openPack(
     pack_id: packId,
     expected_amount_usdc: priceUsdc,
   };
-  console.log(`[openPack] XHR POST ${url}`);
-  console.log(`[openPack] body: ${JSON.stringify(body)}`);
+  logger.log(`[openPack] XHR POST ${url}`);
+  logger.log(`[openPack] body: ${JSON.stringify(body)}`);
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open('POST', url);
@@ -268,26 +268,26 @@ export function openPack(
     xhr.setRequestHeader('Authorization', `Bearer ${SUPABASE_ANON_KEY}`);
     xhr.timeout = 30000;
     xhr.onreadystatechange = () => {
-      console.log(`[openPack] readyState=${xhr.readyState}, status=${xhr.status}`);
+      logger.log(`[openPack] readyState=${xhr.readyState}, status=${xhr.status}`);
       if (xhr.readyState === 4) {
         if (xhr.status > 0) {
-          console.log(`[openPack] response status=${xhr.status}, body=${xhr.responseText.slice(0, 500)}`);
+          logger.log(`[openPack] response status=${xhr.status}, body=${xhr.responseText.slice(0, 500)}`);
           try {
             resolve(JSON.parse(xhr.responseText));
           } catch {
             reject(new Error(`Invalid JSON response: ${xhr.responseText.slice(0, 200)}`));
           }
         } else {
-          console.error(`[openPack] readyState=4 but status=0 — network error`);
+          logger.error(`[openPack] readyState=4 but status=0 — network error`);
         }
       }
     };
     xhr.onerror = () => {
-      console.error(`[openPack] XHR onerror fired`);
+      logger.error(`[openPack] XHR onerror fired`);
       reject(new Error(`Network error calling open-pack`));
     };
     xhr.ontimeout = () => {
-      console.error(`[openPack] XHR timeout after 30s`);
+      logger.error(`[openPack] XHR timeout after 30s`);
       reject(new Error(`Timeout calling open-pack`));
     };
     xhr.send(JSON.stringify(body));

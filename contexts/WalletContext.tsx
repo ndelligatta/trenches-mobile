@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useCallback, useEffect, use
 import { Platform, Alert } from 'react-native';
 import { Connection, PublicKey, VersionedTransaction, clusterApiUrl } from '@solana/web3.js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 import { useAppKit, useAccount, useAppKitState } from '@reown/appkit-react-native';
 import {
   ensurePlayer,
@@ -15,6 +16,8 @@ import {
 } from '../lib/supabase';
 import { JUPITER_API_KEY } from '../constants/onchain';
 import { getUsdcSwapQuote, buildSwapTransaction } from '../lib/jupiter';
+import { logger } from '../lib/logger';
+import { isDemoMode, DEMO_WALLET_ADDRESS, DEMO_PLAYER, DEMO_BALANCE, showDemoPurchaseAlert } from '../lib/demo';
 
 const MWA_ADDRESS_KEY = '@trenches_mwa_address';
 const MWA_AUTH_TOKEN_KEY = '@trenches_mwa_auth_token';
@@ -47,7 +50,7 @@ function getTransact() {
     const mod = require('@solana-mobile/mobile-wallet-adapter-protocol-web3js');
     mwaTransact = mod.transact;
   } catch (e) {
-    console.warn('[MWA] require failed:', e);
+    logger.warn('[MWA] require failed:', e);
     mwaTransact = null;
     mwaChecked = true;
   }
@@ -99,7 +102,10 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     (async () => {
       try {
         const savedAddr = await AsyncStorage.getItem(MWA_ADDRESS_KEY);
-        const savedToken = await AsyncStorage.getItem(MWA_AUTH_TOKEN_KEY);
+        // Read auth token from SecureStore, fall back to AsyncStorage for legacy migration
+        let savedToken: string | null = null;
+        try { savedToken = await SecureStore.getItemAsync(MWA_AUTH_TOKEN_KEY); } catch {}
+        if (!savedToken) { savedToken = await AsyncStorage.getItem(MWA_AUTH_TOKEN_KEY); }
         if (savedAddr) {
           setMwaAddress(savedAddr);
           mwaAuthTokenRef.current = savedToken;
@@ -108,12 +114,15 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     })();
   }, []);
 
-  // Determine active connection: MWA takes priority
-  const connectedVia: 'mwa' | 'appkit' | null = mwaAddress
-    ? 'mwa'
-    : appKitConnected
-      ? 'appkit'
-      : null;
+  // Determine active connection: demo > MWA > AppKit
+  const demoActive = isDemoMode();
+  const connectedVia: 'mwa' | 'appkit' | null = demoActive
+    ? 'mwa' // demo mode pretends to be MWA
+    : mwaAddress
+      ? 'mwa'
+      : appKitConnected
+        ? 'appkit'
+        : null;
 
   // Parse CAIP address if needed for AppKit
   const appKitAddress = appKitRawAddress?.includes(':')
@@ -121,7 +130,9 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     : appKitRawAddress;
 
   // The active address from whichever connection method is active
-  const address = mwaAddress ?? (appKitConnected ? appKitAddress : undefined);
+  const address = demoActive
+    ? DEMO_WALLET_ADDRESS
+    : mwaAddress ?? (appKitConnected ? appKitAddress : undefined);
   const connected = !!address;
   const connecting = mwaConnecting || appKitLoading;
 
@@ -158,14 +169,14 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         const addr = pubkey.toBase58();
         mwaAuthTokenRef.current = authResult.auth_token;
         setMwaAddress(addr);
-        // Persist wallet address + auth token
+        // Persist wallet address + auth token (token in SecureStore)
         AsyncStorage.setItem(MWA_ADDRESS_KEY, addr).catch(() => {});
         if (authResult.auth_token) {
-          AsyncStorage.setItem(MWA_AUTH_TOKEN_KEY, authResult.auth_token).catch(() => {});
+          SecureStore.setItemAsync(MWA_AUTH_TOKEN_KEY, authResult.auth_token).catch(() => {});
         }
       });
     } catch (err) {
-      console.error('MWA connection failed:', err);
+      logger.error('MWA connection failed:', err);
     }
     setMwaConnecting(false);
   }, []);
@@ -180,7 +191,8 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     if (mwaAddress) {
       mwaAuthTokenRef.current = null;
       setMwaAddress(null);
-      AsyncStorage.multiRemove([MWA_ADDRESS_KEY, MWA_AUTH_TOKEN_KEY]).catch(() => {});
+      AsyncStorage.removeItem(MWA_ADDRESS_KEY).catch(() => {});
+      SecureStore.deleteItemAsync(MWA_AUTH_TOKEN_KEY).catch(() => {});
     }
     if (appKitConnected) {
       appKitDisconnect();
@@ -211,6 +223,17 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     (async () => {
       setPlayerLoading(true);
 
+      // Demo mode: return mock data instead of hitting network
+      if (demoActive) {
+        if (!cancelled) {
+          setBalance(DEMO_BALANCE);
+          setPlayer(DEMO_PLAYER);
+          setPlayerNameState(DEMO_PLAYER.name);
+          setPlayerLoading(false);
+        }
+        return;
+      }
+
       // Fetch SOL balance
       try {
         const lamports = await connectionRef.current.getBalance(new PublicKey(address));
@@ -228,7 +251,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
           setPlayerNameState(data.name);
         }
       } catch (err) {
-        console.error('Failed to load player:', err);
+        logger.error('Failed to load player:', err);
       }
 
       if (!cancelled) setPlayerLoading(false);
@@ -249,7 +272,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         setPlayerNameState(data.name);
       }
     } catch (err) {
-      console.error('Failed to refresh player:', err);
+      logger.error('Failed to refresh player:', err);
     }
     setPlayerLoading(false);
   }, [address]);
@@ -281,26 +304,27 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
    */
   const purchaseItem = useCallback(
     async (itemId: string, price: number): Promise<VerifyPurchaseResult | boolean> => {
-      console.log(`[PURCHASE] ========== START ==========`);
-      console.log(`[PURCHASE] itemId=${itemId}, price=$${price}, wallet=${address}, connectedVia=${connectedVia}`);
+      logger.log(`[PURCHASE] ========== START ==========`);
+      logger.log(`[PURCHASE] itemId=${itemId}, price=$${price}, wallet=${address}, connectedVia=${connectedVia}`);
 
-      if (!address) { console.log('[PURCHASE] ABORT: no address'); return false; }
+      if (demoActive) { showDemoPurchaseAlert(); return false; }
+      if (!address) { logger.log('[PURCHASE] ABORT: no address'); return false; }
 
       if (!JUPITER_API_KEY) {
-        console.log('[PURCHASE] ABORT: no Jupiter API key');
+        logger.log('[PURCHASE] ABORT: no Jupiter API key');
         Alert.alert('Setup Required', 'Jupiter API key not configured. See constants/onchain.ts.');
         return false;
       }
 
       if (connectedVia !== 'mwa') {
-        console.log('[PURCHASE] ABORT: not connected via MWA, connectedVia=' + connectedVia);
+        logger.log('[PURCHASE] ABORT: not connected via MWA, connectedVia=' + connectedVia);
         Alert.alert('Wallet Required', 'Connect via Seed Vault / Mobile Wallet to make purchases.');
         return false;
       }
 
       const transact = getTransact();
       if (!transact) {
-        console.log('[PURCHASE] ABORT: MWA transact() not available');
+        logger.log('[PURCHASE] ABORT: MWA transact() not available');
         Alert.alert('Error', 'Mobile Wallet Adapter not available.');
         return false;
       }
@@ -310,13 +334,13 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
 
       try {
         // Step 1: Get Jupiter quote (USDC → TRENCH)
-        console.log(`[PURCHASE] Step 1: Getting Jupiter quote for $${price} USDC...`);
+        logger.log(`[PURCHASE] Step 1: Getting Jupiter quote for $${price} USDC...`);
         const quoteStart = Date.now();
         const quote = await getUsdcSwapQuote(price);
-        console.log(`[PURCHASE] Step 1 DONE in ${Date.now() - quoteStart}ms — inAmount=${quote.inAmount}, outAmount=${quote.outAmount}`);
+        logger.log(`[PURCHASE] Step 1 DONE in ${Date.now() - quoteStart}ms — inAmount=${quote.inAmount}, outAmount=${quote.outAmount}`);
 
         // Step 2: User confirmation
-        console.log('[PURCHASE] Step 2: Waiting for user confirmation...');
+        logger.log('[PURCHASE] Step 2: Waiting for user confirmation...');
         const confirmed = await new Promise<boolean>((resolve) => {
           Alert.alert(
             'Confirm Purchase',
@@ -328,40 +352,38 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
           );
         });
 
-        if (!confirmed) { console.log('[PURCHASE] ABORT: user cancelled'); return false; }
-        console.log('[PURCHASE] Step 2 DONE: user confirmed');
+        if (!confirmed) { logger.log('[PURCHASE] ABORT: user cancelled'); return false; }
+        logger.log('[PURCHASE] Step 2 DONE: user confirmed');
 
         // Step 3: Build swap transaction (TRENCH goes to treasury)
-        console.log('[PURCHASE] Step 3: Building swap transaction...');
+        logger.log('[PURCHASE] Step 3: Building swap transaction...');
         const buildStart = Date.now();
         const swapTxBase64 = await buildSwapTransaction(quote, address);
-        console.log(`[PURCHASE] Step 3 DONE in ${Date.now() - buildStart}ms — tx base64 length=${swapTxBase64.length}`);
+        logger.log(`[PURCHASE] Step 3 DONE in ${Date.now() - buildStart}ms — tx base64 length=${swapTxBase64.length}`);
         const swapTxBytes = Buffer.from(swapTxBase64, 'base64');
         const transaction = VersionedTransaction.deserialize(new Uint8Array(swapTxBytes));
 
         // Step 4: Sign & send via MWA
-        console.log('[PURCHASE] Step 4: Opening MWA for signing...');
+        logger.log('[PURCHASE] Step 4: Opening MWA for signing...');
         const mwaStart = Date.now();
         let txSignatureBytes: Uint8Array | undefined;
         await transact(async (wallet: any) => {
-          console.log('[PURCHASE] Step 4a: Authorizing with MWA wallet...');
-          const authResult = await wallet.authorize({
-            cluster: CLUSTER,
-            identity: APP_IDENTITY,
-            auth_token: mwaAuthTokenRef.current,
-          });
+          logger.log(`[PURCHASE] Step 4a: Authorizing with MWA wallet... (has auth_token: ${!!mwaAuthTokenRef.current})`);
+          const authParams: any = { cluster: CLUSTER, identity: APP_IDENTITY };
+          if (mwaAuthTokenRef.current) authParams.auth_token = mwaAuthTokenRef.current;
+          const authResult = await wallet.authorize(authParams);
           mwaAuthTokenRef.current = authResult.auth_token;
           if (authResult.auth_token) {
-            AsyncStorage.setItem(MWA_AUTH_TOKEN_KEY, authResult.auth_token).catch(() => {});
+            SecureStore.setItemAsync(MWA_AUTH_TOKEN_KEY, authResult.auth_token).catch(() => {});
           }
-          console.log('[PURCHASE] Step 4b: Signing and sending transaction...');
+          logger.log('[PURCHASE] Step 4b: Signing and sending transaction...');
           const signatures = await wallet.signAndSendTransactions({
             transactions: [transaction],
           });
           txSignatureBytes = signatures[0];
-          console.log(`[PURCHASE] Step 4c: Got signature bytes, length=${txSignatureBytes?.length}`);
+          logger.log(`[PURCHASE] Step 4c: Got signature bytes, length=${txSignatureBytes?.length}`);
         });
-        console.log(`[PURCHASE] Step 4 DONE: MWA returned in ${Date.now() - mwaStart}ms`);
+        logger.log(`[PURCHASE] Step 4 DONE: MWA returned in ${Date.now() - mwaStart}ms`);
 
         if (!txSignatureBytes) {
           throw new Error('No transaction signature returned');
@@ -375,39 +397,39 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         if (typeof txSignatureBytes === 'string') {
           // MWA returned a string — it's already base58
           txSignature = txSignatureBytes;
-          console.log(`[PURCHASE] Signature is string (base58), length=${txSignature.length}`);
+          logger.log(`[PURCHASE] Signature is string (base58), length=${txSignature.length}`);
         } else {
           // Raw bytes — encode to base58
           const sigBytes = new Uint8Array(txSignatureBytes);
-          console.log(`[PURCHASE] Signature is Uint8Array, length=${sigBytes.length}`);
+          logger.log(`[PURCHASE] Signature is Uint8Array, length=${sigBytes.length}`);
           txSignature = bs58.encode(sigBytes);
         }
-        console.log(`[PURCHASE] Transaction signature: ${txSignature} (len=${txSignature.length})`);
+        logger.log(`[PURCHASE] Transaction signature: ${txSignature} (len=${txSignature.length})`);
 
         // After MWA returns, Android needs time to restore networking AND
         // the transaction needs time to propagate across Solana validators.
-        console.log('[PURCHASE] Step 5: Waiting 5s for Android networking + Solana tx propagation...');
+        logger.log('[PURCHASE] Step 5: Waiting 5s for Android networking + Solana tx propagation...');
         await new Promise(r => setTimeout(r, 5000));
-        console.log('[PURCHASE] Step 5: 5s wait done, starting network calls with retry logic...');
+        logger.log('[PURCHASE] Step 5: 5s wait done, starting network calls with retry logic...');
 
         // Retry helper — retries with delay when calls fail after MWA
         const retry = async <T,>(label: string, fn: () => Promise<T>, attempts = 5, delayMs = 2000): Promise<T> => {
           for (let i = 0; i < attempts; i++) {
             try {
-              console.log(`[PURCHASE] [${label}] attempt ${i + 1}/${attempts}...`);
+              logger.log(`[PURCHASE] [${label}] attempt ${i + 1}/${attempts}...`);
               const start = Date.now();
               const result = await fn();
-              console.log(`[PURCHASE] [${label}] attempt ${i + 1} SUCCESS in ${Date.now() - start}ms`);
+              logger.log(`[PURCHASE] [${label}] attempt ${i + 1} SUCCESS in ${Date.now() - start}ms`);
               return result;
             } catch (err: any) {
-              console.warn(`[PURCHASE] [${label}] attempt ${i + 1} FAILED: ${err?.message?.slice(0, 120)}`);
+              logger.warn(`[PURCHASE] [${label}] attempt ${i + 1} FAILED: ${err?.message?.slice(0, 120)}`);
               // Non-retryable errors (e.g. edge function says "sold out") — fail immediately
               if (err?.nonRetryable) {
-                console.error(`[PURCHASE] [${label}] NON-RETRYABLE — stopping`);
+                logger.error(`[PURCHASE] [${label}] NON-RETRYABLE — stopping`);
                 throw err;
               }
               if (i < attempts - 1) {
-                console.log(`[PURCHASE] [${label}] waiting ${delayMs}ms before retry...`);
+                logger.log(`[PURCHASE] [${label}] waiting ${delayMs}ms before retry...`);
                 await new Promise(r => setTimeout(r, delayMs));
                 continue;
               }
@@ -419,11 +441,11 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
 
         // Step 6: Verify purchase and assign numbered unit via Edge Function
         // This is the ONLY purchase path — no legacy fallback. If this fails, user sees the error.
-        console.log('[PURCHASE] Step 6: Calling verify-purchase Edge Function...');
+        logger.log('[PURCHASE] Step 6: Calling verify-purchase Edge Function...');
         // 8 attempts, 3s apart = up to 24s of retrying for tx propagation
         const verifyResult = await retry('verify-purchase', async () => {
           const result = await verifyPurchase(txSignature, address, itemId, price);
-          console.log(`[PURCHASE] [verify-purchase] response: ${JSON.stringify(result).slice(0, 300)}`);
+          logger.log(`[PURCHASE] [verify-purchase] response: ${JSON.stringify(result).slice(0, 300)}`);
           if (result?.error) {
             // Retryable: tx hasn't propagated to Solana yet
             if (result.error.includes('not found') || result.error.includes('confirming')) {
@@ -442,25 +464,25 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
           return result;
         }, 8, 3000);
 
-        console.log(`[PURCHASE] Step 6 SUCCESS: ${verifyResult.name} #${verifyResult.serial_number} (unit_id=${verifyResult.unit_id})`);
+        logger.log(`[PURCHASE] Step 6 SUCCESS: ${verifyResult.name} #${verifyResult.serial_number} (unit_id=${verifyResult.unit_id})`);
 
         // Step 7: Refresh balance
-        console.log('[PURCHASE] Step 7: Refreshing balance...');
+        logger.log('[PURCHASE] Step 7: Refreshing balance...');
         try {
           const lamports = await retry('balance', () =>
             connectionRef.current.getBalance(new PublicKey(address))
           );
           setBalance(lamports / 1e9);
-          console.log(`[PURCHASE] Step 7 SUCCESS: balance=${lamports / 1e9} SOL`);
+          logger.log(`[PURCHASE] Step 7 SUCCESS: balance=${lamports / 1e9} SOL`);
         } catch (e: any) {
-          console.error(`[PURCHASE] Step 7 balance refresh failed (non-critical): ${e?.message}`);
+          logger.error(`[PURCHASE] Step 7 balance refresh failed (non-critical): ${e?.message}`);
         }
 
-        console.log(`[PURCHASE] ========== COMPLETE ==========`);
+        logger.log(`[PURCHASE] ========== COMPLETE ==========`);
         return verifyResult;
       } catch (err: any) {
-        console.error(`[PURCHASE] ========== FATAL ERROR: ${err?.message} ==========`);
-        console.error('[PURCHASE] Full error:', err);
+        logger.error(`[PURCHASE] ========== FATAL ERROR: ${err?.message} ==========`);
+        logger.error('[PURCHASE] Full error:', err);
         const msg = err?.message || 'Something went wrong';
         if (msg.includes('User rejected') || msg.includes('declined')) {
           Alert.alert('Cancelled', 'Transaction was cancelled.');
@@ -481,19 +503,20 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
    */
   const purchasePack = useCallback(
     async (packId: string, price: number): Promise<OpenPackResult | false> => {
-      console.log(`[PACK] ========== START ==========`);
-      console.log(`[PACK] packId=${packId}, price=$${price}, wallet=${address}, connectedVia=${connectedVia}`);
+      logger.log(`[PACK] ========== START ==========`);
+      logger.log(`[PACK] packId=${packId}, price=$${price}, wallet=${address}, connectedVia=${connectedVia}`);
 
-      if (!address) { console.log('[PACK] ABORT: no address'); return false; }
+      if (demoActive) { showDemoPurchaseAlert(); return false; }
+      if (!address) { logger.log('[PACK] ABORT: no address'); return false; }
 
       if (!JUPITER_API_KEY) {
-        console.log('[PACK] ABORT: no Jupiter API key');
+        logger.log('[PACK] ABORT: no Jupiter API key');
         Alert.alert('Setup Required', 'Jupiter API key not configured.');
         return false;
       }
 
       if (connectedVia !== 'mwa') {
-        console.log('[PACK] ABORT: not connected via MWA');
+        logger.log('[PACK] ABORT: not connected via MWA');
         Alert.alert('Wallet Required', 'Connect via Seed Vault / Mobile Wallet to open packs.');
         return false;
       }
@@ -506,9 +529,9 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
 
       try {
         // Step 1: Get Jupiter quote
-        console.log(`[PACK] Step 1: Getting Jupiter quote for $${price} USDC...`);
+        logger.log(`[PACK] Step 1: Getting Jupiter quote for $${price} USDC...`);
         const quote = await getUsdcSwapQuote(price);
-        console.log(`[PACK] Step 1 DONE — inAmount=${quote.inAmount}, outAmount=${quote.outAmount}`);
+        logger.log(`[PACK] Step 1 DONE — inAmount=${quote.inAmount}, outAmount=${quote.outAmount}`);
 
         // Step 2: User confirmation
         const confirmed = await new Promise<boolean>((resolve) => {
@@ -522,26 +545,24 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
           );
         });
 
-        if (!confirmed) { console.log('[PACK] ABORT: user cancelled'); return false; }
+        if (!confirmed) { logger.log('[PACK] ABORT: user cancelled'); return false; }
 
         // Step 3: Build swap tx
-        console.log('[PACK] Step 3: Building swap transaction...');
+        logger.log('[PACK] Step 3: Building swap transaction...');
         const swapTxBase64 = await buildSwapTransaction(quote, address);
         const swapTxBytes = Buffer.from(swapTxBase64, 'base64');
         const transaction = VersionedTransaction.deserialize(new Uint8Array(swapTxBytes));
 
         // Step 4: Sign & send via MWA
-        console.log('[PACK] Step 4: Opening MWA for signing...');
+        logger.log('[PACK] Step 4: Opening MWA for signing...');
         let txSignatureBytes: Uint8Array | undefined;
         await transact(async (wallet: any) => {
-          const authResult = await wallet.authorize({
-            cluster: CLUSTER,
-            identity: APP_IDENTITY,
-            auth_token: mwaAuthTokenRef.current,
-          });
+          const packAuthParams: any = { cluster: CLUSTER, identity: APP_IDENTITY };
+          if (mwaAuthTokenRef.current) packAuthParams.auth_token = mwaAuthTokenRef.current;
+          const authResult = await wallet.authorize(packAuthParams);
           mwaAuthTokenRef.current = authResult.auth_token;
           if (authResult.auth_token) {
-            AsyncStorage.setItem(MWA_AUTH_TOKEN_KEY, authResult.auth_token).catch(() => {});
+            SecureStore.setItemAsync(MWA_AUTH_TOKEN_KEY, authResult.auth_token).catch(() => {});
           }
           const signatures = await wallet.signAndSendTransactions({
             transactions: [transaction],
@@ -558,22 +579,22 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         } else {
           txSignature = bs58.encode(new Uint8Array(txSignatureBytes));
         }
-        console.log(`[PACK] Transaction signature: ${txSignature}`);
+        logger.log(`[PACK] Transaction signature: ${txSignature}`);
 
         // Step 5: Wait for propagation
-        console.log('[PACK] Step 5: Waiting 5s for tx propagation...');
+        logger.log('[PACK] Step 5: Waiting 5s for tx propagation...');
         await new Promise(r => setTimeout(r, 5000));
 
         // Retry helper
         const retry = async <T,>(label: string, fn: () => Promise<T>, attempts = 8, delayMs = 3000): Promise<T> => {
           for (let i = 0; i < attempts; i++) {
             try {
-              console.log(`[PACK] [${label}] attempt ${i + 1}/${attempts}...`);
+              logger.log(`[PACK] [${label}] attempt ${i + 1}/${attempts}...`);
               const result = await fn();
-              console.log(`[PACK] [${label}] attempt ${i + 1} SUCCESS`);
+              logger.log(`[PACK] [${label}] attempt ${i + 1} SUCCESS`);
               return result;
             } catch (err: any) {
-              console.warn(`[PACK] [${label}] attempt ${i + 1} FAILED: ${err?.message?.slice(0, 120)}`);
+              logger.warn(`[PACK] [${label}] attempt ${i + 1} FAILED: ${err?.message?.slice(0, 120)}`);
               if (err?.nonRetryable) throw err;
               if (i < attempts - 1) {
                 await new Promise(r => setTimeout(r, delayMs));
@@ -586,10 +607,10 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         };
 
         // Step 6: Call open-pack edge function
-        console.log('[PACK] Step 6: Calling open-pack Edge Function...');
+        logger.log('[PACK] Step 6: Calling open-pack Edge Function...');
         const packResult = await retry('open-pack', async () => {
           const result = await openPack(txSignature, address, packId, price);
-          console.log(`[PACK] [open-pack] response: ${JSON.stringify(result).slice(0, 300)}`);
+          logger.log(`[PACK] [open-pack] response: ${JSON.stringify(result).slice(0, 300)}`);
           if (result?.error) {
             if (result.error.includes('not found') || result.error.includes('confirming')) {
               throw new Error(result.error);
@@ -606,7 +627,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
           return result;
         });
 
-        console.log(`[PACK] Step 6 SUCCESS: ${packResult.name} #${packResult.serial_number}`);
+        logger.log(`[PACK] Step 6 SUCCESS: ${packResult.name} #${packResult.serial_number}`);
 
         // Step 7: Refresh balance
         try {
@@ -614,10 +635,10 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
           setBalance(lamports / 1e9);
         } catch {}
 
-        console.log(`[PACK] ========== COMPLETE ==========`);
+        logger.log(`[PACK] ========== COMPLETE ==========`);
         return packResult;
       } catch (err: any) {
-        console.error(`[PACK] ========== FATAL ERROR: ${err?.message} ==========`);
+        logger.error(`[PACK] ========== FATAL ERROR: ${err?.message} ==========`);
         const msg = err?.message || 'Something went wrong';
         if (msg.includes('User rejected') || msg.includes('declined')) {
           Alert.alert('Cancelled', 'Transaction was cancelled.');

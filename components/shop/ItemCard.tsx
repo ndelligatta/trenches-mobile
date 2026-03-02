@@ -57,11 +57,8 @@ export function ItemCard({ item, cardWidth }: ItemCardProps) {
         <View style={styles.bottomRow}>
           <Text style={[styles.typeName, { color: rarityColor }]}>{item.rarity}</Text>
           <View style={styles.priceRow}>
-            <View style={styles.trenchIcon}>
-              <Text style={styles.trenchSymbol}>V</Text>
-            </View>
             <Text style={styles.priceText}>
-              {item.price === -1 ? 'N/A' : item.price.toLocaleString()}
+              {item.price === -1 ? 'N/A' : `$${(item.price / 100) >= 1 ? Math.round(item.price / 100).toLocaleString() : (item.price / 100).toFixed(2)}`}
             </Text>
           </View>
         </View>

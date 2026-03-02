@@ -3,7 +3,7 @@ import { SolanaAdapter, PhantomConnector, SolflareConnector } from '@reown/appki
 import { solana, solanaTestnet, solanaDevnet, type Storage } from '@reown/appkit-common-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const projectId = '0b840bb98f4fea8ce4647bc0b0de86a0';
+const projectId = process.env.EXPO_PUBLIC_APPKIT_PROJECT_ID ?? '';
 
 const metadata = {
   name: 'Trenches',
