@@ -141,8 +141,8 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     const transact = getTransact();
     if (!transact) {
       Alert.alert(
-        'Wallet Not Available',
-        'Mobile Wallet Adapter is not available on this device. Try other login options.',
+        'Wallet Required',
+        'You need a Solana wallet app installed to use Trenches. Please install one of the following:\n\n• Phantom\n• Solflare\n• Seed Vault (Solana Seeker)',
       );
       return;
     }
@@ -175,8 +175,20 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
           SecureStore.setItemAsync(MWA_AUTH_TOKEN_KEY, authResult.auth_token).catch(() => {});
         }
       });
-    } catch (err) {
+    } catch (err: any) {
       logger.error('MWA connection failed:', err);
+      const msg = err?.message || '';
+      if (msg.includes('Found no installed wallet') || msg.includes('No wallet found') || msg.includes('NO_WALLET_FOUND')) {
+        Alert.alert(
+          'Wallet Required',
+          'No Solana wallet app was found on this device. Please install one of the following:\n\n• Phantom\n• Solflare\n• Seed Vault (Solana Seeker)',
+        );
+      } else if (!msg.includes('User rejected') && !msg.includes('declined')) {
+        Alert.alert(
+          'Connection Failed',
+          'Could not connect to wallet. Make sure you have a Solana wallet app installed (Phantom, Solflare, or Seed Vault).',
+        );
+      }
     }
     setMwaConnecting(false);
   }, []);

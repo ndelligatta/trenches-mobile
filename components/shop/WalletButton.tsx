@@ -1,12 +1,43 @@
-import React from 'react';
-import { TouchableOpacity, Text, StyleSheet, View, ActivityIndicator } from 'react-native';
+import React, { useRef, useState } from 'react';
+import { TouchableOpacity, Text, StyleSheet, View, ActivityIndicator, Modal, Linking } from 'react-native';
 import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useWallet } from '../../contexts/WalletContext';
 import { COLORS, FONT, SPACING } from '../../constants/theme';
 
+const TERMS_ACCEPTED_KEY = '@trenches_terms_accepted';
+
+const TOS_URL = 'https://trenchesgame.com/terms';
+const PP_URL = 'https://trenchesgame.com/privacy';
+
 export function WalletButton() {
   const router = useRouter();
-  const { connected, connecting, address, balance, playerName, connectMWA, openWalletModal, disconnect } = useWallet();
+  const { connected, connecting, address, balance, playerName, connectMWA } = useWallet();
+  const termsAccepted = useRef(false);
+  const [showTerms, setShowTerms] = useState(false);
+
+  const checkAndConnect = async () => {
+    if (termsAccepted.current) {
+      connectMWA();
+      return;
+    }
+
+    const stored = await AsyncStorage.getItem(TERMS_ACCEPTED_KEY);
+    if (stored === 'true') {
+      termsAccepted.current = true;
+      connectMWA();
+      return;
+    }
+
+    setShowTerms(true);
+  };
+
+  const acceptTerms = async () => {
+    termsAccepted.current = true;
+    await AsyncStorage.setItem(TERMS_ACCEPTED_KEY, 'true').catch(() => {});
+    setShowTerms(false);
+    connectMWA();
+  };
 
   const displayName = playerName
     ? playerName
@@ -40,14 +71,38 @@ export function WalletButton() {
   }
 
   return (
-    <View style={styles.loginRow}>
-      <TouchableOpacity style={styles.connectButton} onPress={connectMWA}>
+    <>
+      <TouchableOpacity style={styles.connectButton} onPress={checkAndConnect}>
         <Text style={styles.connectText}>Connect Wallet</Text>
       </TouchableOpacity>
-      <TouchableOpacity style={styles.altLoginButton} onPress={openWalletModal}>
-        <Text style={styles.altLoginText}>More</Text>
-      </TouchableOpacity>
-    </View>
+
+      <Modal visible={showTerms} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Heads Up</Text>
+            <Text style={styles.modalBody}>
+              By connecting, you agree to our{' '}
+              <Text style={styles.link} onPress={() => Linking.openURL(TOS_URL)}>
+                Terms of Service
+              </Text>
+              {' '}and{' '}
+              <Text style={styles.link} onPress={() => Linking.openURL(PP_URL)}>
+                Privacy Policy
+              </Text>
+              .
+            </Text>
+            <View style={styles.modalButtons}>
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => setShowTerms(false)}>
+                <Text style={styles.cancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.continueBtn} onPress={acceptTerms}>
+                <Text style={styles.continueBtnText}>Continue</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </>
   );
 }
 
@@ -62,11 +117,6 @@ const styles = StyleSheet.create({
     fontFamily: FONT.medium,
     fontSize: 14,
   },
-  loginRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.xs,
-  },
   connectButton: {
     backgroundColor: COLORS.primary,
     paddingHorizontal: SPACING.lg,
@@ -78,19 +128,6 @@ const styles = StyleSheet.create({
     fontFamily: FONT.bold,
     fontSize: 14,
     letterSpacing: 0.5,
-  },
-  altLoginButton: {
-    backgroundColor: COLORS.surface,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm + 2,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: COLORS.cardBorder,
-  },
-  altLoginText: {
-    color: COLORS.textSecondary,
-    fontFamily: FONT.medium,
-    fontSize: 13,
   },
   connectedContainer: {
     flexDirection: 'row',
@@ -129,5 +166,68 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     fontFamily: FONT.medium,
     fontSize: 13,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalCard: {
+    backgroundColor: COLORS.card,
+    borderRadius: 16,
+    padding: 24,
+    width: '100%',
+    maxWidth: 340,
+    borderWidth: 1,
+    borderColor: COLORS.cardBorder,
+  },
+  modalTitle: {
+    color: COLORS.text,
+    fontFamily: FONT.bold,
+    fontSize: 18,
+    marginBottom: 12,
+  },
+  modalBody: {
+    color: COLORS.textSecondary,
+    fontFamily: FONT.regular,
+    fontSize: 14,
+    lineHeight: 22,
+    marginBottom: 20,
+  },
+  link: {
+    color: COLORS.primary,
+    fontFamily: FONT.semibold,
+    textDecorationLine: 'underline' as const,
+  },
+  modalButtons: {
+    flexDirection: 'row' as const,
+    gap: 10,
+  },
+  cancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.cardBorder,
+    alignItems: 'center' as const,
+  },
+  cancelBtnText: {
+    color: COLORS.textSecondary,
+    fontFamily: FONT.medium,
+    fontSize: 14,
+  },
+  continueBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center' as const,
+  },
+  continueBtnText: {
+    color: '#000',
+    fontFamily: FONT.bold,
+    fontSize: 14,
   },
 });
