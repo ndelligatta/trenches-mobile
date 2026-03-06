@@ -24,9 +24,6 @@
       },
       "package": "com.trenchesgame",
       "versionCode": 3,
-      "blockedPermissions": [
-        "android.permission.SYSTEM_ALERT_WINDOW"
-      ],
       "privacyPolicy": "https://trenchesgame.com/privacy.html",
       "termsOfService": "https://trenchesgame.com/terms.html"
     },
@@ -37,13 +34,6 @@
       "expo-router",
       "expo-font",
       "expo-secure-store"
-    ],
-    "extra": {
-      "router": {},
-      "eas": {
-        "projectId": "b016ee8d-2492-4071-b622-4a1b293ba84e"
-      }
-    },
-    "owner": "nolan2d"
+    ]
   }
 }
